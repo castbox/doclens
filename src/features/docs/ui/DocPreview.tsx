@@ -55,6 +55,108 @@ function formatBytes(bytes: number): string {
   return `${bytes} B`;
 }
 
+const ORANGE_CODE_COLOR = "#C2410C";
+const DOC_MARKDOWN_PATH_PATTERN = /(?:docs\/|\/|\.\.\/|\.\/)[^\s)\]`]+?\.md(?:#[^\s)\]`]+)?/g;
+
+const orangeSyntaxTheme = Object.fromEntries(
+  Object.entries(oneLight).map(([selector, style]) => {
+    return [selector, { ...(style as React.CSSProperties), color: ORANGE_CODE_COLOR }];
+  })
+) as typeof oneLight;
+
+function autoLinkDocsMarkdownPaths(markdown: string): string {
+  const lines = markdown.split(/\r?\n/);
+  let inFence = false;
+  let currentFenceMarker = "";
+
+  return lines
+    .map((line) => {
+      const fenceMatch = line.match(/^\s*(```+|~~~+)/);
+      if (fenceMatch) {
+        const marker = fenceMatch[1][0];
+        if (!inFence) {
+          inFence = true;
+          currentFenceMarker = marker;
+        } else if (marker === currentFenceMarker) {
+          inFence = false;
+          currentFenceMarker = "";
+        }
+        return line;
+      }
+
+      if (inFence) {
+        return line;
+      }
+
+      return line.replace(DOC_MARKDOWN_PATH_PATTERN, (matched, offset, source) => {
+        const start = Number(offset);
+        const prefix = source.slice(Math.max(0, start - 2), start);
+        if (prefix === "](") {
+          return matched;
+        }
+
+        return `[${matched}](${matched})`;
+      });
+    })
+    .join("\n");
+}
+
+function normalizeDocsRelativePath(inputPath: string): string | null {
+  const normalized = inputPath.replace(/\\/g, "/");
+  const segments: string[] = [];
+
+  for (const segment of normalized.split("/")) {
+    if (!segment || segment === ".") {
+      continue;
+    }
+
+    if (segment === "..") {
+      if (segments.length === 0) {
+        return null;
+      }
+
+      segments.pop();
+      continue;
+    }
+
+    segments.push(segment);
+  }
+
+  return segments.join("/");
+}
+
+function resolveMarkdownDocPath(href: string | undefined, currentPath: string): string | null {
+  if (!href) {
+    return null;
+  }
+
+  const decodedHref = decodeURIComponent(href).trim();
+  if (!decodedHref || decodedHref.startsWith("#")) {
+    return null;
+  }
+
+  if (/^[a-zA-Z][a-zA-Z\d+.-]*:/.test(decodedHref)) {
+    return null;
+  }
+
+  const pathOnly = decodedHref.split("#")[0].split("?")[0];
+  if (!pathOnly.toLowerCase().endsWith(".md")) {
+    return null;
+  }
+
+  if (pathOnly.startsWith("docs/")) {
+    return normalizeDocsRelativePath(pathOnly.slice("docs/".length));
+  }
+
+  if (pathOnly.startsWith("/")) {
+    return normalizeDocsRelativePath(pathOnly.slice(1));
+  }
+
+  const currentDir = currentPath.includes("/") ? currentPath.slice(0, currentPath.lastIndexOf("/")) : "";
+  const merged = currentDir ? `${currentDir}/${pathOnly}` : pathOnly;
+  return normalizeDocsRelativePath(merged);
+}
+
 function CodeTextPreview({ content, filePath, location }: { content: string; filePath: string; location?: PreviewLocation }): React.JSX.Element {
   const lines = content.split(/\r?\n/);
 
@@ -101,7 +203,7 @@ function CodeTextPreview({ content, filePath, location }: { content: string; fil
               >
                 {lineNumber}
               </Typography>
-              <Typography component="span" variant="caption" className="mono" sx={{ py: 0.25, color: "text.primary" }}>
+              <Typography component="span" variant="caption" className="mono" sx={{ py: 0.25, color: ORANGE_CODE_COLOR }}>
                 {line || " "}
               </Typography>
             </Box>
@@ -110,6 +212,19 @@ function CodeTextPreview({ content, filePath, location }: { content: string; fil
       </Box>
     </Paper>
   );
+}
+
+function buildAnchorHash(href: string | undefined): string {
+  if (!href || !href.includes("#")) {
+    return "";
+  }
+
+  const raw = href.slice(href.indexOf("#") + 1).trim();
+  if (!raw) {
+    return "";
+  }
+
+  return decodeURIComponent(raw);
 }
 
 export function DocPreview({
@@ -127,13 +242,21 @@ export function DocPreview({
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
   const [copyFeedback, setCopyFeedback] = React.useState<{ severity: "success" | "error"; message: string } | null>(null);
-  const markdownHeadings = React.useMemo(() => {
+  const markdownContent = React.useMemo(() => {
     if (!data || data.kind !== "markdown") {
+      return "";
+    }
+
+    return autoLinkDocsMarkdownPaths(data.content);
+  }, [data]);
+
+  const markdownHeadings = React.useMemo(() => {
+    if (!markdownContent) {
       return [];
     }
 
-    return extractMarkdownHeadings(data.content);
-  }, [data]);
+    return extractMarkdownHeadings(markdownContent);
+  }, [markdownContent]);
 
   React.useEffect(() => {
     if (!path) {
@@ -349,6 +472,46 @@ export function DocPreview({
                     h4: renderHeading("h4"),
                     h5: renderHeading("h5"),
                     h6: renderHeading("h6"),
+                    a({ href, children, ...props }) {
+                      const targetPath = resolveMarkdownDocPath(href, path);
+                      if (targetPath) {
+                        const anchorHash = buildAnchorHash(href);
+                        const targetHash = anchorHash ? `#${anchorHash}` : "";
+
+                        return (
+                          <a
+                            href={`/docs?path=${encodeURIComponent(targetPath)}${targetHash}`}
+                            style={{ color: "var(--mui-palette-primary-main)", textDecoration: "underline", cursor: "pointer" }}
+                            onClick={(event) => {
+                              event.preventDefault();
+
+                              if (targetPath === path) {
+                                if (anchorHash) {
+                                  window.location.hash = anchorHash;
+                                }
+                                return;
+                              }
+
+                              onNavigatePath(targetPath);
+                              if (anchorHash) {
+                                window.setTimeout(() => {
+                                  window.location.hash = anchorHash;
+                                }, 0);
+                              }
+                            }}
+                            {...props}
+                          >
+                            {children}
+                          </a>
+                        );
+                      }
+
+                      return (
+                        <a href={href} target="_blank" rel="noreferrer" style={{ color: "var(--mui-palette-primary-main)" }} {...props}>
+                          {children}
+                        </a>
+                      );
+                    },
                     code({ className, children }) {
                       const rawValue = String(children ?? "");
                       const value = rawValue.replace(/\n$/, "");
@@ -363,8 +526,8 @@ export function DocPreview({
                               px: 0.6,
                               py: 0.2,
                               borderRadius: 0.6,
-                              bgcolor: "rgba(15,23,42,0.08)",
-                              color: "#0f172a",
+                              bgcolor: "rgba(194,65,12,0.12)",
+                              color: ORANGE_CODE_COLOR,
                               fontSize: "0.88em"
                             }}
                           >
@@ -376,7 +539,7 @@ export function DocPreview({
                       return (
                         <SyntaxHighlighter
                           language={language}
-                          style={oneLight}
+                          style={orangeSyntaxTheme}
                           showLineNumbers
                           wrapLines
                           lineProps={(lineNumber) => ({
@@ -413,12 +576,20 @@ export function DocPreview({
                     }
                   }}
                 >
-                  {data.content}
+                  {markdownContent}
                 </ReactMarkdown>
               </Paper>
                 );
               })()}
-              <Box sx={{ width: { xs: "100%", lg: 260 }, flexShrink: 0 }}>
+              <Box
+                sx={{
+                  width: { xs: "100%", lg: 260 },
+                  flexShrink: 0,
+                  position: { xs: "static", lg: "sticky" },
+                  top: { lg: 84 },
+                  alignSelf: { lg: "flex-start" }
+                }}
+              >
                 <DocOutline headings={markdownHeadings} />
               </Box>
             </Stack>

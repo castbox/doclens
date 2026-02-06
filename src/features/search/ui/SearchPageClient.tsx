@@ -29,7 +29,7 @@ export function SearchPageClient({ initialQuery }: { initialQuery: string }): Re
           <SearchPanel
             initialQuery={initialQuery}
             onOpenHit={(path, line) => {
-              router.push(`/docs?path=${encodeURIComponent(path)}#L${line}`);
+              router.push(`/docs/view?path=${encodeURIComponent(path)}&line=${line}`);
             }}
           />
         </Paper>
