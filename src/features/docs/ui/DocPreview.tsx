@@ -463,7 +463,7 @@ export function DocPreview({
           ) : null}
 
           {data.kind === "markdown" ? (
-            <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
+            <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ alignItems: { xs: "stretch", md: "flex-start" } }}>
               {(() => {
                 let headingRenderIndex = 0;
                 const renderHeading =
@@ -479,10 +479,11 @@ export function DocPreview({
                 variant="outlined"
                 sx={{
                   flex: 1,
+                  width: "100%",
+                  minWidth: 0,
                   p: { xs: 1.5, md: 2.25 },
                   overflowX: "hidden",
                   minHeight: 220,
-                  maxWidth: { xs: "100%", xl: 900 },
                   "& p": { lineHeight: 1.72, color: "text.primary" },
                   "& p, & li, & td, & th, & blockquote, & a": {
                     overflowWrap: "anywhere",
@@ -652,18 +653,20 @@ export function DocPreview({
               </Paper>
                 );
               })()}
-              <Box
-                sx={{
-                  width: { xs: "100%", md: 272 },
-                  flexShrink: 0,
-                  position: { xs: "static", md: "sticky" },
-                  top: { md: 8 },
-                  alignSelf: { md: "flex-start" },
-                  zIndex: 1
-                }}
-              >
-                <DocOutline headings={markdownHeadings} />
-              </Box>
+              {markdownHeadings.length > 0 ? (
+                <Box
+                  sx={{
+                    width: { xs: "100%", md: "clamp(220px, 24vw, 320px)" },
+                    flexShrink: 0,
+                    position: { xs: "static", md: "sticky" },
+                    top: { md: 8 },
+                    alignSelf: { md: "flex-start" },
+                    zIndex: 1
+                  }}
+                >
+                  <DocOutline headings={markdownHeadings} />
+                </Box>
+              ) : null}
             </Stack>
           ) : null}
 

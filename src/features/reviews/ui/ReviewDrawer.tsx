@@ -32,29 +32,26 @@ const DRAWER_WIDTH = 360;
 const APP_HEADER_HEIGHT = 64;
 
 export function ReviewDrawer({
+  open,
+  onOpenChange,
   selectedPath,
   onOpenFile,
   refreshToken
 }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   selectedPath: string;
   onOpenFile: (path: string) => void;
   refreshToken: number;
 }): React.JSX.Element {
   const theme = useTheme();
   const isLgUp = useMediaQuery(theme.breakpoints.up("lg"));
-  const [open, setOpen] = React.useState(false);
   const [files, setFiles] = React.useState<PrFileRecord[]>([]);
   const [categories, setCategories] = React.useState<string[]>([]);
   const [categoryFilter, setCategoryFilter] = React.useState("");
   const [readFilter, setReadFilter] = React.useState<PrFileReadFilter>("all");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
-
-  React.useEffect(() => {
-    if (isLgUp) {
-      setOpen(true);
-    }
-  }, [isLgUp]);
 
   const loadFiles = React.useCallback(async () => {
     setLoading(true);
@@ -110,7 +107,7 @@ export function ReviewDrawer({
         variant={isLgUp ? "persistent" : "temporary"}
         anchor="right"
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={() => onOpenChange(false)}
         ModalProps={{ keepMounted: true }}
         sx={{
           width: open ? DRAWER_WIDTH : 0,
@@ -134,7 +131,7 @@ export function ReviewDrawer({
             <Typography variant="subtitle1" fontWeight={700}>
               PR 文件面板
             </Typography>
-            <Button size="small" onClick={() => setOpen(false)}>
+            <Button size="small" onClick={() => onOpenChange(false)}>
               收起
             </Button>
           </Stack>
@@ -251,7 +248,7 @@ export function ReviewDrawer({
             zIndex: 30
           }}
         >
-          <Button variant="contained" onClick={() => setOpen(true)} endIcon={<LaunchIcon />}>
+          <Button variant="contained" onClick={() => onOpenChange(true)} endIcon={<LaunchIcon />}>
             打开 PR 面板
           </Button>
         </Box>

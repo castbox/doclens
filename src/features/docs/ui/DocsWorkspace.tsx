@@ -20,6 +20,7 @@ const APP_HEADER_HEIGHT = 64;
 export function DocsWorkspace(): React.JSX.Element {
   const theme = useTheme();
   const isMdUp = useMediaQuery(theme.breakpoints.up("md"));
+  const isLgUp = useMediaQuery(theme.breakpoints.up("lg"));
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathParam = searchParams.get("path") ?? "";
@@ -28,6 +29,7 @@ export function DocsWorkspace(): React.JSX.Element {
   const [location, setLocation] = React.useState<{ line?: number; heading?: string }>({});
   const [showSearch, setShowSearch] = React.useState(true);
   const [docsDrawerOpen, setDocsDrawerOpen] = React.useState(true);
+  const [reviewDrawerOpen, setReviewDrawerOpen] = React.useState(false);
   const [reviewRefreshToken, setReviewRefreshToken] = React.useState(0);
   const latestReadPath = React.useRef("");
 
@@ -56,6 +58,12 @@ export function DocsWorkspace(): React.JSX.Element {
       setDocsDrawerOpen(false);
     }
   }, [docsDrawerOpen, isMdUp]);
+
+  React.useEffect(() => {
+    if (isLgUp) {
+      setReviewDrawerOpen(true);
+    }
+  }, [isLgUp]);
 
   const selectPath = React.useCallback(
     (path: string, line?: number) => {
@@ -176,7 +184,7 @@ export function DocsWorkspace(): React.JSX.Element {
           py: { xs: 1.5, md: 1.25 },
           px: { xs: 1, sm: 1.25, md: 1.5 },
           pl: { xs: 1, md: docsDrawerOpen ? `${DOCS_DRAWER_WIDTH + 16}px` : 1.5 },
-          pr: { xs: 1, sm: 1.25, md: 1.5, lg: `${REVIEW_DRAWER_WIDTH + 20}px` },
+          pr: { xs: 1, sm: 1.25, md: 1.5, lg: reviewDrawerOpen ? `${REVIEW_DRAWER_WIDTH + 20}px` : 1.5 },
           transition: "padding 180ms ease"
         }}
       >
@@ -235,6 +243,8 @@ export function DocsWorkspace(): React.JSX.Element {
       </Container>
 
       <ReviewDrawer
+        open={reviewDrawerOpen}
+        onOpenChange={setReviewDrawerOpen}
         selectedPath={selectedPath}
         refreshToken={reviewRefreshToken}
         onOpenFile={(path) => {
