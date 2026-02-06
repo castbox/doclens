@@ -93,6 +93,87 @@ function isOffsetInRanges(offset: number, ranges: TextRange[]): boolean {
   return ranges.some((range) => offset >= range.start && offset < range.end);
 }
 
+function detectDiffSectionTitle(line: string): "diff-self-check" | "diff-range" | null {
+  const trimmed = line.trim();
+  const headingMatch = /^\s*#{1,6}\s*(.+?)\s*$/.exec(trimmed);
+  const text = (headingMatch?.[1] ?? trimmed).replace(/\s+/g, " ").trim();
+
+  if (/^关键\s*Diff\s*[（(]自检[）)]$/i.test(text)) {
+    return "diff-self-check";
+  }
+
+  if (/^Diff\s*\(spike\/fullstack\.\.\.HEAD\)$/i.test(text)) {
+    return "diff-range";
+  }
+
+  return null;
+}
+
+function preserveDiffSectionLineBreaks(markdown: string): string {
+  const lines = markdown.split(/\r?\n/);
+  const output: string[] = [];
+  let inDiffSection = false;
+  let inFence = false;
+  let currentFenceMarker = "";
+
+  for (const line of lines) {
+    const fenceMatch = line.match(/^\s*(```+|~~~+)/);
+    if (fenceMatch) {
+      const marker = fenceMatch[1][0];
+      if (!inFence) {
+        inFence = true;
+        currentFenceMarker = marker;
+      } else if (marker === currentFenceMarker) {
+        inFence = false;
+        currentFenceMarker = "";
+      }
+      output.push(line);
+      continue;
+    }
+
+    if (!inFence) {
+      if (/^\s*#{1,6}\s+/.test(line)) {
+        inDiffSection = detectDiffSectionTitle(line) !== null;
+        output.push(line);
+        continue;
+      }
+
+      const lineTitle = detectDiffSectionTitle(line);
+      if (lineTitle !== null) {
+        inDiffSection = true;
+        output.push(line);
+        continue;
+      }
+    }
+
+    if (!inDiffSection || inFence) {
+      output.push(line);
+      continue;
+    }
+
+    const trimmed = line.trim();
+    if (!trimmed) {
+      output.push(line);
+      continue;
+    }
+
+    // Preserve explicit line breaks for plain-text diff summaries.
+    if (/^\s*([-*+]|\d+\.)\s+/.test(line) || /^\s*>/.test(line) || /^\s*\|/.test(line)) {
+      output.push(line);
+      continue;
+    }
+
+    if (/\s{2,}$/.test(line) || /<br\s*\/?>\s*$/i.test(line)) {
+      output.push(line);
+      continue;
+    }
+
+    output.push(`${line}  `);
+  }
+
+  return output.join("\n");
+}
+
 function autoLinkDocsMarkdownPaths(markdown: string): string {
   const lines = markdown.split(/\r?\n/);
   let inFence = false;
@@ -293,7 +374,7 @@ export function DocPreview({
       return "";
     }
 
-    return autoLinkDocsMarkdownPaths(data.content);
+    return autoLinkDocsMarkdownPaths(preserveDiffSectionLineBreaks(data.content));
   }, [data]);
 
   const markdownHeadings = React.useMemo(() => {
