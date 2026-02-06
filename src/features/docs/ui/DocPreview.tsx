@@ -212,7 +212,11 @@ export function DocPreview({
                 size="small"
                 aria-label="copy path"
                 onClick={async () => {
-                  await navigator.clipboard.writeText(path);
+                  await navigator.clipboard.writeText(`docs/${path}`);
+                  setCopyFeedback({
+                    severity: "success",
+                    message: "已复制 docs 路径"
+                  });
                 }}
               >
                 <ContentCopyIcon fontSize="small" />
