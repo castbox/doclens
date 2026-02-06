@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
-import SearchIcon from "@mui/icons-material/Search";
 import { AppBar, Box, Button, Container, Divider, Drawer, Paper, Stack, Toolbar, Typography, useMediaQuery } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import Link from "next/link";
@@ -10,7 +9,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { parseLocationAnchor, stripPathAnchor } from "@/features/docs/domain/anchor";
 import { DocPreview } from "@/features/docs/ui/DocPreview";
 import { DocsTree } from "@/features/docs/ui/DocsTree";
-import { SearchPanel } from "@/features/search/ui/SearchPanel";
 import { ReviewDrawer } from "@/features/reviews/ui/ReviewDrawer";
 
 const DOCS_DRAWER_WIDTH = 320;
@@ -28,7 +26,6 @@ export function DocsWorkspace(): React.JSX.Element {
 
   const [selectedPath, setSelectedPath] = React.useState(pathParam);
   const [location, setLocation] = React.useState<{ line?: number; heading?: string }>({});
-  const [showSearch, setShowSearch] = React.useState(true);
   const [docsDrawerOpen, setDocsDrawerOpen] = React.useState(false);
   const [reviewDrawerOpen, setReviewDrawerOpen] = React.useState(false);
   const [reviewRefreshToken, setReviewRefreshToken] = React.useState(0);
@@ -137,14 +134,6 @@ export function DocsWorkspace(): React.JSX.Element {
               >
                 {docsDrawerOpen ? "收起目录" : "展开目录"}
               </Button>
-              <Button
-                size="small"
-                variant={showSearch ? "contained" : "outlined"}
-                startIcon={<SearchIcon />}
-                onClick={() => setShowSearch((prev) => !prev)}
-              >
-                {showSearch ? "隐藏搜索" : "显示搜索"}
-              </Button>
               <Button size="small" variant="outlined" component={Link} href="/search">
                 搜索页
               </Button>
@@ -205,18 +194,6 @@ export function DocsWorkspace(): React.JSX.Element {
         }}
       >
         <Stack spacing={1.2}>
-          {showSearch ? (
-            <Paper variant="outlined" sx={{ p: { xs: 1, md: 1.2 }, bgcolor: "rgba(255,255,255,0.9)" }}>
-              <SearchPanel
-                initialQuery=""
-                scope=""
-                onOpenHit={(path, line) => {
-                  selectPath(path, line);
-                }}
-              />
-            </Paper>
-          ) : null}
-
           <Paper
             variant="outlined"
             sx={{
