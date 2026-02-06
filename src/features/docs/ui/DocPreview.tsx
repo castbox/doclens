@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import ArticleOutlinedIcon from "@mui/icons-material/ArticleOutlined";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import {
@@ -11,11 +12,14 @@ import {
   Divider,
   IconButton,
   Paper,
+  Snackbar,
   Stack,
   Tooltip,
   Typography
 } from "@mui/material";
 import ReactMarkdown from "react-markdown";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
 import rehypeSlug from "rehype-slug";
 import remarkGfm from "remark-gfm";
 import type { FilePreviewPayload } from "@/features/docs/domain/types";
@@ -31,6 +35,11 @@ type PreviewLocation = {
 function languageFromFilePath(filePath: string): string {
   const extension = filePath.includes(".") ? filePath.slice(filePath.lastIndexOf(".") + 1) : "txt";
   return extension.toLowerCase();
+}
+
+function languageFromCodeClassName(className?: string): string {
+  const matched = /language-([a-zA-Z0-9-]+)/.exec(className ?? "");
+  return matched?.[1] ?? "text";
 }
 
 function formatBytes(bytes: number): string {
@@ -116,6 +125,7 @@ export function DocPreview({
   const [data, setData] = React.useState<FilePreviewPayload | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
+  const [copyFeedback, setCopyFeedback] = React.useState<{ severity: "success" | "error"; message: string } | null>(null);
 
   React.useEffect(() => {
     if (!path) {
@@ -208,6 +218,36 @@ export function DocPreview({
                 <ContentCopyIcon fontSize="small" />
               </IconButton>
             </Tooltip>
+            {data?.kind === "markdown" ? (
+              <Tooltip title="复制 Markdown 源文件">
+                <IconButton
+                  size="small"
+                  aria-label="copy markdown source"
+                  onClick={async () => {
+                    try {
+                      const response = await fetch(`/api/docs/file?path=${encodeURIComponent(path)}&raw=1`);
+                      if (!response.ok) {
+                        throw new Error("failed to load markdown source");
+                      }
+
+                      const markdownSource = await response.text();
+                      await navigator.clipboard.writeText(markdownSource);
+                      setCopyFeedback({
+                        severity: "success",
+                        message: "已复制 Markdown 源文件"
+                      });
+                    } catch {
+                      setCopyFeedback({
+                        severity: "error",
+                        message: "复制 Markdown 源文件失败"
+                      });
+                    }
+                  }}
+                >
+                  <ArticleOutlinedIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            ) : null}
             <Tooltip title="打开原文件">
               <IconButton
                 size="small"
@@ -245,19 +285,101 @@ export function DocPreview({
                   overflowX: "auto",
                   minHeight: 220,
                   "& p": { lineHeight: 1.75 },
-                  "& pre": {
-                    p: 1.25,
-                    bgcolor: "#0f172a",
-                    color: "#f8fafc",
-                    borderRadius: 1.5,
-                    overflowX: "auto"
+                  "& blockquote": {
+                    m: 0,
+                    px: 1.5,
+                    py: 0.75,
+                    borderLeft: "4px solid #A8C7E6",
+                    bgcolor: "rgba(11,114,133,0.05)",
+                    color: "text.secondary"
+                  },
+                  "& table": {
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    my: 1.5
+                  },
+                  "& th, & td": {
+                    border: "1px solid #D7E4EE",
+                    px: 1,
+                    py: 0.8,
+                    textAlign: "left"
+                  },
+                  "& th": {
+                    bgcolor: "#F5F9FD"
                   },
                   "& code": {
                     fontFamily: "var(--font-ibm-plex-mono)"
                   }
                 }}
               >
-                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSlug]}>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeSlug]}
+                  components={{
+                    code({ className, children }) {
+                      const rawValue = String(children ?? "");
+                      const value = rawValue.replace(/\n$/, "");
+                      const language = languageFromCodeClassName(className);
+                      const inline = !className && !rawValue.includes("\n");
+
+                      if (inline) {
+                        return (
+                          <Box
+                            component="code"
+                            sx={{
+                              px: 0.6,
+                              py: 0.2,
+                              borderRadius: 0.6,
+                              bgcolor: "rgba(15,23,42,0.08)",
+                              color: "#0f172a",
+                              fontSize: "0.88em"
+                            }}
+                          >
+                            {value}
+                          </Box>
+                        );
+                      }
+
+                      return (
+                        <SyntaxHighlighter
+                          language={language}
+                          style={oneLight}
+                          showLineNumbers
+                          wrapLines
+                          lineProps={(lineNumber) => ({
+                            style: {
+                              display: "block",
+                              backgroundColor: lineNumber % 2 === 0 ? "rgba(148,163,184,0.08)" : "transparent"
+                            }
+                          })}
+                          lineNumberStyle={{
+                            minWidth: "2.5em",
+                            paddingLeft: "12px",
+                            paddingRight: "12px",
+                            color: "#64748B",
+                            userSelect: "none"
+                          }}
+                          customStyle={{
+                            margin: 0,
+                            padding: "12px 0",
+                            border: "1px solid #D7E4EE",
+                            borderRadius: "10px",
+                            fontSize: "13px",
+                            lineHeight: 1.65,
+                            background: "#F8FAFC"
+                          }}
+                          codeTagProps={{
+                            style: {
+                              fontFamily: "var(--font-ibm-plex-mono)"
+                            }
+                          }}
+                        >
+                          {value}
+                        </SyntaxHighlighter>
+                      );
+                    }
+                  }}
+                >
                   {data.content}
                 </ReactMarkdown>
               </Paper>
@@ -306,6 +428,25 @@ export function DocPreview({
           ) : null}
         </>
       ) : null}
+
+      <Snackbar
+        open={Boolean(copyFeedback)}
+        autoHideDuration={2200}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+        onClose={() => {
+          setCopyFeedback(null);
+        }}
+      >
+        <Alert
+          severity={copyFeedback?.severity ?? "success"}
+          variant="filled"
+          onClose={() => {
+            setCopyFeedback(null);
+          }}
+        >
+          {copyFeedback?.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
