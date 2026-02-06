@@ -458,6 +458,32 @@ export function DocPreview({
       return;
     }
 
+    if (location?.line && Number.isFinite(location.line) && location.line > 0) {
+      const directLineAnchor = document.getElementById(`line-${location.line}`);
+      if (directLineAnchor) {
+        directLineAnchor.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+
+      const nearestHeading = [...markdownHeadings]
+        .reverse()
+        .find((heading) => heading.line <= location.line!);
+
+      if (nearestHeading) {
+        const headingAnchor = document.getElementById(nearestHeading.slug);
+        if (headingAnchor) {
+          headingAnchor.scrollIntoView({ behavior: "smooth", block: "start" });
+          return;
+        }
+      }
+
+      const markdownRoot = document.getElementById("markdown-preview-root");
+      if (markdownRoot) {
+        markdownRoot.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      return;
+    }
+
     if (location?.heading) {
       const decodedHeading = decodeURIComponent(location.heading);
       const byId = document.getElementById(decodedHeading);
@@ -469,7 +495,7 @@ export function DocPreview({
         headingElement.scrollIntoView({ behavior: "smooth", block: "start" });
       }
     }
-  }, [data, location?.heading, markdownHeadings]);
+  }, [data, location?.heading, location?.line, markdownHeadings]);
 
   if (!path) {
     return <EmptyState title="请选择文件" description="从左侧目录树选择一个文档开始预览" />;
@@ -584,6 +610,7 @@ export function DocPreview({
 
                 return (
               <Paper
+                id="markdown-preview-root"
                 variant="outlined"
                 sx={{
                   flex: 1,

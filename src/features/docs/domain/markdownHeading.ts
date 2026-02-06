@@ -5,6 +5,7 @@ export type MarkdownHeading = {
   level: number;
   text: string;
   slug: string;
+  line: number;
 };
 
 export function extractMarkdownTitle(content: string, fallback: string): string {
@@ -38,7 +39,8 @@ export function extractMarkdownHeadings(markdown: string, maxCount = 40): Markdo
   let inFence = false;
   let fenceMarker = "";
 
-  for (const line of lines) {
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
     const fenceMatch = line.match(/^\s*(```+|~~~+)/);
     if (fenceMatch) {
       const marker = fenceMatch[1][0];
@@ -68,7 +70,8 @@ export function extractMarkdownHeadings(markdown: string, maxCount = 40): Markdo
     headings.push({
       level,
       text,
-      slug
+      slug,
+      line: index + 1
     });
 
     if (headings.length >= maxCount) {
