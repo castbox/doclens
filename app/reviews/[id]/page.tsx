@@ -126,9 +126,6 @@ export default function ReviewDetailPage({ params }: { params: { id: string } })
             <ReviewItemsEditor
               sheetId={params.id}
               items={data.items}
-              onCreated={(item) => {
-                setData((prev) => (prev ? { ...prev, items: [...prev.items, item] } : prev));
-              }}
               onUpdated={(item) => {
                 setData((prev) =>
                   prev

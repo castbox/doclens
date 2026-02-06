@@ -1,68 +1,108 @@
 "use client";
 
 import * as React from "react";
-import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import LaunchIcon from "@mui/icons-material/Launch";
 import {
   Alert,
   Box,
   Button,
   Chip,
-  Dialog,
-  DialogContent,
-  DialogTitle,
   Divider,
   Drawer,
-  IconButton,
   List,
   ListItemButton,
   ListItemText,
+  MenuItem,
   Stack,
-  Tooltip,
+  TextField,
   Typography
 } from "@mui/material";
-import Link from "next/link";
-import { buildDefaultReviewSheet } from "@/features/reviews/domain/reviewTemplate";
-import type { CreateReviewSheetInput, ReviewSheet } from "@/features/reviews/domain/types";
-import { ReviewSheetForm } from "@/features/reviews/ui/ReviewSheetForm";
+import type { PrFileRecord } from "@/features/reviews/domain/types";
 import { formatDateTime } from "@/shared/domain/time";
 import { EmptyState, LoadingState } from "@/shared/ui/StateCard";
 
-export function ReviewDrawer({ docPath }: { docPath: string }): React.JSX.Element {
+type PrFilesPayload = {
+  files?: PrFileRecord[];
+  dates?: string[];
+  error?: string;
+};
+
+export function ReviewDrawer({
+  selectedPath,
+  onOpenFile,
+  refreshToken
+}: {
+  selectedPath: string;
+  onOpenFile: (path: string) => void;
+  refreshToken: number;
+}): React.JSX.Element {
   const [open, setOpen] = React.useState(true);
-  const [reviews, setReviews] = React.useState<ReviewSheet[]>([]);
+  const [files, setFiles] = React.useState<PrFileRecord[]>([]);
+  const [dates, setDates] = React.useState<string[]>([]);
+  const [dateFilter, setDateFilter] = React.useState("");
+  const [keywordInput, setKeywordInput] = React.useState("");
+  const [keyword, setKeyword] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
-  const [createOpen, setCreateOpen] = React.useState(false);
-  const [creating, setCreating] = React.useState(false);
 
-  const loadReviews = React.useCallback(async () => {
-    if (!docPath) {
-      setReviews([]);
-      return;
-    }
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setKeyword(keywordInput.trim());
+    }, 220);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [keywordInput]);
 
+  const loadFiles = React.useCallback(async () => {
     setLoading(true);
     setError("");
 
     try {
-      const response = await fetch(`/api/reviews?doc_path=${encodeURIComponent(docPath)}`);
-      const payload = (await response.json()) as { reviews?: ReviewSheet[]; error?: string };
-      if (!response.ok || !payload.reviews) {
-        throw new Error(payload.error ?? "加载审阅单失败");
+      const params = new URLSearchParams();
+      if (dateFilter) {
+        params.set("date", dateFilter);
+      }
+      if (keyword) {
+        params.set("q", keyword);
       }
 
-      setReviews(payload.reviews);
+      const response = await fetch(`/api/reviews/pr-files?${params.toString()}`);
+      const payload = (await response.json()) as PrFilesPayload;
+      if (!response.ok || !payload.files || !payload.dates) {
+        throw new Error(payload.error ?? "加载 PR 文件失败");
+      }
+
+      setFiles(payload.files);
+      setDates(payload.dates);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "加载审阅单失败");
+      setError(loadError instanceof Error ? loadError.message : "加载 PR 文件失败");
     } finally {
       setLoading(false);
     }
-  }, [docPath]);
+  }, [dateFilter, keyword]);
 
   React.useEffect(() => {
-    void loadReviews();
-  }, [loadReviews]);
+    void loadFiles();
+  }, [loadFiles, refreshToken]);
+
+  React.useEffect(() => {
+    if (!selectedPath.startsWith("pr/")) {
+      return;
+    }
+
+    setFiles((prev) =>
+      prev.map((item) =>
+        item.path === selectedPath
+          ? {
+              ...item,
+              isRead: true,
+              readAt: new Date().toISOString()
+            }
+          : item
+      )
+    );
+  }, [selectedPath]);
 
   return (
     <>
@@ -83,56 +123,86 @@ export function ReviewDrawer({ docPath }: { docPath: string }): React.JSX.Elemen
       >
         <Stack direction="row" alignItems="center" justifyContent="space-between">
           <Typography variant="subtitle1" fontWeight={700}>
-            审阅面板
+            PR 文件面板
           </Typography>
-          <Stack direction="row" spacing={0.5}>
-            <Tooltip title="创建审阅单">
-              <IconButton
-                size="small"
-                aria-label="create review sheet"
-                onClick={() => {
-                  setCreateOpen(true);
-                }}
-              >
-                <AddCircleOutlineIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Button size="small" onClick={() => setOpen(false)}>
-              收起
-            </Button>
-          </Stack>
+          <Button size="small" onClick={() => setOpen(false)}>
+            收起
+          </Button>
         </Stack>
 
         <Divider sx={{ my: 1 }} />
 
-        {!docPath ? <EmptyState title="选择文档后可查看关联审阅单" /> : null}
-        {loading ? <LoadingState label="加载审阅单..." /> : null}
+        <Stack direction={{ xs: "column", md: "row" }} spacing={0.8} sx={{ mb: 1 }}>
+          <TextField
+            select
+            size="small"
+            label="日期目录"
+            value={dateFilter}
+            onChange={(event) => {
+              setDateFilter(event.target.value);
+            }}
+            sx={{ minWidth: 140 }}
+          >
+            <MenuItem value="">全部</MenuItem>
+            {dates.map((date) => (
+              <MenuItem key={date} value={date}>
+                {date}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            size="small"
+            label="关键词"
+            placeholder="按路径/文件名搜索"
+            value={keywordInput}
+            onChange={(event) => {
+              setKeywordInput(event.target.value);
+            }}
+            fullWidth
+          />
+        </Stack>
+
+        {loading ? <LoadingState label="加载 PR 文件..." /> : null}
         {error ? <Alert severity="error">{error}</Alert> : null}
 
-        {!loading && docPath && reviews.length === 0 ? <EmptyState title="暂无关联审阅单" description="点击右上角 + 创建首条记录" /> : null}
+        {!loading && files.length === 0 ? <EmptyState title="暂无 PR 文件" description="请检查 docs/pr 目录是否存在文件" /> : null}
 
-        {!loading && reviews.length > 0 ? (
+        {!loading && files.length > 0 ? (
           <List disablePadding>
-            {reviews.map((item) => (
-              <ListItemButton key={item.id} component={Link} href={`/reviews/${item.id}`} sx={{ mb: 0.8, borderRadius: 1.2, border: "1px solid", borderColor: "divider" }}>
+            {files.map((item) => (
+              <ListItemButton
+                key={item.path}
+                onClick={() => onOpenFile(item.path)}
+                sx={{
+                  mb: 0.8,
+                  borderRadius: 1.2,
+                  border: "1px solid",
+                  borderColor: selectedPath === item.path ? "primary.main" : "divider"
+                }}
+              >
                 <ListItemText
                   primary={
                     <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
                       <Typography variant="body2" fontWeight={600} noWrap>
-                        {item.title}
+                        {item.name}
                       </Typography>
-                      <Chip label={item.status} size="small" variant="outlined" />
+                      <Chip label={item.isRead ? "已读" : "未读"} size="small" color={item.isRead ? "success" : "warning"} variant="outlined" />
                     </Stack>
                   }
                   secondary={
-                    <Stack direction="row" justifyContent="space-between" alignItems="center" mt={0.75}>
-                      <Typography variant="caption" color="text.secondary">
-                        {item.reviewer || "未指定 Reviewer"}
+                    <>
+                      <Typography variant="caption" color="text.secondary" className="mono">
+                        {item.path}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {formatDateTime(item.updatedAt)}
-                      </Typography>
-                    </Stack>
+                      <Stack direction="row" justifyContent="space-between" alignItems="center" mt={0.75}>
+                        <Typography variant="caption" color="text.secondary">
+                          日期目录：{item.dateFolder}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          创建：{formatDateTime(item.createdAt)}
+                        </Typography>
+                      </Stack>
+                    </>
                   }
                 />
               </ListItemButton>
@@ -151,44 +221,10 @@ export function ReviewDrawer({ docPath }: { docPath: string }): React.JSX.Elemen
           }}
         >
           <Button variant="contained" onClick={() => setOpen(true)} endIcon={<LaunchIcon />}>
-            打开审阅面板
+            打开 PR 面板
           </Button>
         </Box>
       ) : null}
-
-      <Dialog open={createOpen} onClose={() => setCreateOpen(false)} fullWidth maxWidth="md">
-        <DialogTitle>创建审阅单</DialogTitle>
-        <DialogContent>
-          <ReviewSheetForm
-            initialValue={buildDefaultReviewSheet(docPath)}
-            loading={creating}
-            onSubmit={async (value: CreateReviewSheetInput) => {
-              setCreating(true);
-              setError("");
-
-              try {
-                const response = await fetch("/api/reviews", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(value)
-                });
-
-                const payload = (await response.json()) as ReviewSheet & { error?: string };
-                if (!response.ok) {
-                  throw new Error(payload.error ?? "创建失败");
-                }
-
-                setCreateOpen(false);
-                await loadReviews();
-              } catch (createError) {
-                setError(createError instanceof Error ? createError.message : "创建失败");
-              } finally {
-                setCreating(false);
-              }
-            }}
-          />
-        </DialogContent>
-      </Dialog>
     </>
   );
 }

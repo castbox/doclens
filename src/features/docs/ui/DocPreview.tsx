@@ -102,7 +102,17 @@ function CodeTextPreview({ content, filePath, location }: { content: string; fil
   );
 }
 
-export function DocPreview({ path, location, onNavigatePath }: { path: string; location?: PreviewLocation; onNavigatePath: (path: string) => void }): React.JSX.Element {
+export function DocPreview({
+  path,
+  location,
+  onNavigatePath,
+  onLoaded
+}: {
+  path: string;
+  location?: PreviewLocation;
+  onNavigatePath: (path: string) => void;
+  onLoaded?: (path: string) => void;
+}): React.JSX.Element {
   const [data, setData] = React.useState<FilePreviewPayload | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -130,6 +140,7 @@ export function DocPreview({ path, location, onNavigatePath }: { path: string; l
         }
 
         setData(payload);
+        onLoaded?.(payload.path);
       } catch (loadError) {
         if (loadError instanceof DOMException && loadError.name === "AbortError") {
           return;
@@ -146,7 +157,7 @@ export function DocPreview({ path, location, onNavigatePath }: { path: string; l
     return () => {
       controller.abort();
     };
-  }, [path]);
+  }, [onLoaded, path]);
 
   React.useEffect(() => {
     if (!data || data.kind !== "markdown") {

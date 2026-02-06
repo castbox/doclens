@@ -60,3 +60,13 @@ export type CreateReviewItemInput = {
 };
 
 export type UpdateReviewItemInput = Partial<CreateReviewItemInput>;
+
+export type PrFileRecord = {
+  path: string;
+  name: string;
+  dateFolder: string;
+  createdAt: string;
+  modifiedAt: string;
+  isRead: boolean;
+  readAt: string | null;
+};

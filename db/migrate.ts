@@ -37,6 +37,22 @@ async function main() {
   `);
 
   await db.run(sql`CREATE INDEX IF NOT EXISTS review_items_sheet_id_idx ON review_items(sheet_id);`);
+
+  await db.run(sql`
+    CREATE TABLE IF NOT EXISTS pr_review_files (
+      path TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      date_folder TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      modified_at INTEGER NOT NULL,
+      is_read INTEGER NOT NULL DEFAULT 0,
+      read_at INTEGER,
+      last_seen_at INTEGER NOT NULL
+    );
+  `);
+
+  await db.run(sql`CREATE INDEX IF NOT EXISTS pr_review_files_date_idx ON pr_review_files(date_folder);`);
+  await db.run(sql`CREATE INDEX IF NOT EXISTS pr_review_files_created_idx ON pr_review_files(created_at DESC);`);
 }
 
 main().catch((error) => {

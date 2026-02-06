@@ -1,8 +1,10 @@
 "use client";
 
 import * as React from "react";
+import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
 import SearchIcon from "@mui/icons-material/Search";
-import { AppBar, Box, Button, Container, Grid, Paper, Stack, Toolbar, Typography } from "@mui/material";
+import { AppBar, Box, Button, Container, Divider, Drawer, Paper, Stack, Toolbar, Typography, useMediaQuery } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { parseLocationAnchor } from "@/features/docs/domain/anchor";
@@ -11,7 +13,11 @@ import { DocsTree } from "@/features/docs/ui/DocsTree";
 import { SearchPanel } from "@/features/search/ui/SearchPanel";
 import { ReviewDrawer } from "@/features/reviews/ui/ReviewDrawer";
 
+const DOCS_DRAWER_WIDTH = 320;
+
 export function DocsWorkspace(): React.JSX.Element {
+  const theme = useTheme();
+  const isMdUp = useMediaQuery(theme.breakpoints.up("md"));
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathParam = searchParams.get("path") ?? "";
@@ -19,6 +25,9 @@ export function DocsWorkspace(): React.JSX.Element {
   const [selectedPath, setSelectedPath] = React.useState(pathParam);
   const [location, setLocation] = React.useState<{ line?: number; heading?: string }>({});
   const [showSearch, setShowSearch] = React.useState(true);
+  const [docsDrawerOpen, setDocsDrawerOpen] = React.useState(true);
+  const [reviewRefreshToken, setReviewRefreshToken] = React.useState(0);
+  const latestReadPath = React.useRef("");
 
   React.useEffect(() => {
     setSelectedPath(pathParam);
@@ -40,6 +49,12 @@ export function DocsWorkspace(): React.JSX.Element {
     };
   }, []);
 
+  React.useEffect(() => {
+    if (!isMdUp && docsDrawerOpen) {
+      setDocsDrawerOpen(false);
+    }
+  }, [docsDrawerOpen, isMdUp]);
+
   const selectPath = React.useCallback(
     (path: string, line?: number) => {
       const params = new URLSearchParams(searchParams.toString());
@@ -55,8 +70,12 @@ export function DocsWorkspace(): React.JSX.Element {
       router.replace(`${nextUrl}${hash}`);
       setSelectedPath(path);
       setLocation(line ? { line } : {});
+
+      if (!isMdUp) {
+        setDocsDrawerOpen(false);
+      }
     },
-    [router, searchParams]
+    [isMdUp, router, searchParams]
   );
 
   return (
@@ -76,6 +95,14 @@ export function DocsWorkspace(): React.JSX.Element {
             <Stack direction="row" gap={1}>
               <Button
                 size="small"
+                variant={docsDrawerOpen ? "contained" : "outlined"}
+                startIcon={<MenuBookOutlinedIcon />}
+                onClick={() => setDocsDrawerOpen((prev) => !prev)}
+              >
+                {docsDrawerOpen ? "收起目录" : "展开目录"}
+              </Button>
+              <Button
+                size="small"
                 variant={showSearch ? "contained" : "outlined"}
                 startIcon={<SearchIcon />}
                 onClick={() => setShowSearch((prev) => !prev)}
@@ -93,51 +120,104 @@ export function DocsWorkspace(): React.JSX.Element {
         </Toolbar>
       </AppBar>
 
-      <Container maxWidth={false} sx={{ py: 1.25, px: { xs: 1, md: 1.5 }, pr: { lg: "380px" } }}>
-        <Grid container spacing={1.25}>
-          <Grid item xs={12}>
-            {showSearch ? (
-              <Paper variant="outlined" sx={{ p: 1.25 }}>
-                <SearchPanel
-                  initialQuery=""
-                  scope=""
-                  onOpenHit={(path, line) => {
-                    selectPath(path, line);
-                  }}
-                />
-              </Paper>
-            ) : null}
-          </Grid>
+      <Drawer
+        anchor="left"
+        open={docsDrawerOpen}
+        onClose={() => setDocsDrawerOpen(false)}
+        variant={isMdUp ? "persistent" : "temporary"}
+        ModalProps={{ keepMounted: true }}
+        sx={{
+          width: DOCS_DRAWER_WIDTH,
+          flexShrink: 0,
+          "& .MuiDrawer-paper": {
+            width: DOCS_DRAWER_WIDTH,
+            boxSizing: "border-box",
+            p: 1.25,
+            borderRight: "1px solid #D7E4EE",
+            top: 64,
+            height: "calc(100dvh - 64px)"
+          }
+        }}
+      >
+        <Stack direction="row" alignItems="center" justifyContent="space-between">
+          <Typography variant="subtitle1" fontWeight={700}>
+            Docs 目录
+          </Typography>
+          <Button size="small" onClick={() => setDocsDrawerOpen(false)}>
+            收起
+          </Button>
+        </Stack>
+        <Divider sx={{ my: 1 }} />
+        <DocsTree
+          selectedPath={selectedPath}
+          onSelectFile={(path) => {
+            selectPath(path);
+          }}
+        />
+      </Drawer>
 
-          <Grid item xs={12} md={3} lg={2.8}>
-            <Paper variant="outlined" sx={{ p: 1, minHeight: "78vh", maxHeight: "78vh", overflow: "hidden" }}>
-              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.75 }}>
-                Docs 目录
-              </Typography>
-              <DocsTree
-                selectedPath={selectedPath}
-                onSelectFile={(path) => {
-                  selectPath(path);
+      <Container
+        maxWidth={false}
+        sx={{
+          py: 1.25,
+          px: { xs: 1, md: 1.5 },
+          pl: { xs: 1, md: docsDrawerOpen ? "336px" : 1.5 },
+          pr: { lg: "380px" },
+          transition: "padding 180ms ease"
+        }}
+      >
+        <Stack spacing={1.25}>
+          {showSearch ? (
+            <Paper variant="outlined" sx={{ p: 1.25 }}>
+              <SearchPanel
+                initialQuery=""
+                scope=""
+                onOpenHit={(path, line) => {
+                  selectPath(path, line);
                 }}
               />
             </Paper>
-          </Grid>
+          ) : null}
 
-          <Grid item xs={12} md={9} lg={9.2}>
-            <Paper variant="outlined" sx={{ p: { xs: 1, md: 1.25 }, minHeight: "78vh", overflow: "auto" }}>
-              <DocPreview
-                path={selectedPath}
-                location={location}
-                onNavigatePath={(path) => {
-                  selectPath(path);
-                }}
-              />
-            </Paper>
-          </Grid>
-        </Grid>
+          <Paper variant="outlined" sx={{ p: { xs: 1, md: 1.25 }, minHeight: "78vh", overflow: "auto" }}>
+            <DocPreview
+              path={selectedPath}
+              location={location}
+              onNavigatePath={(path) => {
+                selectPath(path);
+              }}
+              onLoaded={async (path) => {
+                if (!path.startsWith("pr/") || latestReadPath.current === path) {
+                  return;
+                }
+
+                latestReadPath.current = path;
+                try {
+                  const response = await fetch("/api/reviews/pr-files/read", {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ path, isRead: true })
+                  });
+
+                  if (response.ok) {
+                    setReviewRefreshToken((prev) => prev + 1);
+                  }
+                } catch {
+                  // Ignore mark-read failures to avoid blocking preview rendering.
+                }
+              }}
+            />
+          </Paper>
+        </Stack>
       </Container>
 
-      <ReviewDrawer docPath={selectedPath} />
+      <ReviewDrawer
+        selectedPath={selectedPath}
+        refreshToken={reviewRefreshToken}
+        onOpenFile={(path) => {
+          selectPath(path);
+        }}
+      />
     </Box>
   );
 }

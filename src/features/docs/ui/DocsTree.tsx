@@ -9,71 +9,67 @@ import FolderOutlinedIcon from "@mui/icons-material/FolderOutlined";
 import { Alert, Box, IconButton, List, ListItemButton, ListItemIcon, ListItemText, TextField, Typography } from "@mui/material";
 import type { TreeNode } from "@/features/docs/domain/types";
 
-const STORAGE_KEY = "doclens:expanded_tree_paths";
-
 type NodeMap = Record<string, TreeNode[]>;
 
 export function DocsTree({ selectedPath, onSelectFile }: { selectedPath: string; onSelectFile: (path: string) => void }): React.JSX.Element {
   const [nodeMap, setNodeMap] = React.useState<NodeMap>({});
-  const [expanded, setExpanded] = React.useState<Set<string>>(new Set([""]));
-  const [loadingPaths, setLoadingPaths] = React.useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
   const [filter, setFilter] = React.useState("");
+  const [loadingAll, setLoadingAll] = React.useState(false);
   const [error, setError] = React.useState("");
 
-  const loadNodes = React.useCallback(async (path: string) => {
-    setLoadingPaths((prev) => new Set(prev).add(path));
+  const fetchNodes = React.useCallback(async (path: string): Promise<TreeNode[]> => {
+    const params = new URLSearchParams();
+    if (path) {
+      params.set("path", path);
+    }
+
+    const response = await fetch(`/api/docs/tree?${params.toString()}`);
+    const payload = (await response.json()) as { error?: string; nodes?: TreeNode[] };
+    if (!response.ok || !payload.nodes) {
+      throw new Error(payload.error ?? "加载目录失败");
+    }
+
+    return payload.nodes;
+  }, []);
+
+  const loadAllNodes = React.useCallback(async () => {
+    setLoadingAll(true);
     setError("");
 
     try {
-      const params = new URLSearchParams();
-      if (path) {
-        params.set("path", path);
+      const nextNodeMap: NodeMap = {};
+      const queue: string[] = [""];
+      const expandedPaths = new Set<string>();
+
+      while (queue.length > 0) {
+        const currentPath = queue.shift() ?? "";
+        const nodes = await fetchNodes(currentPath);
+        nextNodeMap[currentPath] = nodes;
+        expandedPaths.add(currentPath);
+
+        for (const node of nodes) {
+          if (node.type === "directory") {
+            queue.push(node.path);
+          }
+        }
       }
 
-      const response = await fetch(`/api/docs/tree?${params.toString()}`);
-      const payload = (await response.json()) as { error?: string; nodes?: TreeNode[] };
-
-      if (!response.ok || !payload.nodes) {
-        throw new Error(payload.error ?? "加载目录失败");
-      }
-
-      setNodeMap((prev) => ({ ...prev, [path]: payload.nodes ?? [] }));
+      setNodeMap(nextNodeMap);
+      setExpanded(expandedPaths);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "加载目录失败");
     } finally {
-      setLoadingPaths((prev) => {
-        const next = new Set(prev);
-        next.delete(path);
-        return next;
-      });
+      setLoadingAll(false);
     }
-  }, []);
+  }, [fetchNodes]);
 
   React.useEffect(() => {
-    const raw = typeof window !== "undefined" ? window.localStorage.getItem(STORAGE_KEY) : null;
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw) as string[];
-        setExpanded(new Set(["", ...parsed]));
-      } catch {
-        // ignore invalid cache
-      }
-    }
-
-    loadNodes("");
-  }, [loadNodes]);
-
-  React.useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const stored = Array.from(expanded).filter((item) => item);
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
-  }, [expanded]);
+    void loadAllNodes();
+  }, [loadAllNodes]);
 
   const toggleDirectory = React.useCallback(
-    async (path: string) => {
+    (path: string) => {
       setExpanded((prev) => {
         const next = new Set(prev);
         if (next.has(path)) {
@@ -83,12 +79,8 @@ export function DocsTree({ selectedPath, onSelectFile }: { selectedPath: string;
         }
         return next;
       });
-
-      if (!nodeMap[path]) {
-        await loadNodes(path);
-      }
     },
-    [loadNodes, nodeMap]
+    []
   );
 
   const renderNodes = React.useCallback(
@@ -142,25 +134,19 @@ export function DocsTree({ selectedPath, onSelectFile }: { selectedPath: string;
                 ) : null}
               </ListItemButton>
               {isDirectory && isExpanded ? (
-                loadingPaths.has(node.path) ? (
-                  <Typography key={`${node.path}:loading`} variant="caption" color="text.secondary" sx={{ pl: 2 + level * 1.75, py: 0.5, display: "block" }}>
-                    加载中...
-                  </Typography>
-                ) : (
-                  <List key={`${node.path}:children`} disablePadding>
-                    {renderNodes(children, level + 1)}
-                  </List>
-                )
+                <List key={`${node.path}:children`} disablePadding>
+                  {renderNodes(children, level + 1)}
+                </List>
               ) : null}
             </React.Fragment>
           );
         });
     },
-    [expanded, filter, loadingPaths, nodeMap, onSelectFile, selectedPath, toggleDirectory]
+    [expanded, filter, nodeMap, onSelectFile, selectedPath, toggleDirectory]
   );
 
   return (
-    <Box sx={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <Box>
       <TextField
         placeholder="过滤目录节点"
         value={filter}
@@ -173,10 +159,13 @@ export function DocsTree({ selectedPath, onSelectFile }: { selectedPath: string;
       />
 
       {error ? <Alert severity="error" sx={{ mb: 1 }}>{error}</Alert> : null}
+      {loadingAll ? (
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+          正在展开全部目录...
+        </Typography>
+      ) : null}
 
-      <Box sx={{ overflowY: "auto", flex: 1, pr: 0.5 }}>
-        <List disablePadding>{renderNodes(nodeMap[""] ?? [], 0)}</List>
-      </Box>
+      <List disablePadding>{renderNodes(nodeMap[""] ?? [], 0)}</List>
     </Box>
   );
 }
