@@ -9,7 +9,7 @@ export function DocOutline({ headings }: { headings: MarkdownHeading[] }): React
   }
 
   return (
-    <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1.5, px: 0.8, py: 0.8, maxHeight: 360, overflowY: "auto" }}>
+    <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1.5, px: 0.8, py: 0.8 }}>
       <Typography variant="caption" color="text.secondary" sx={{ px: 1, py: 0.2, display: "block", fontWeight: 600 }}>
         文档大纲
       </Typography>
@@ -37,8 +37,13 @@ export function DocOutline({ headings }: { headings: MarkdownHeading[] }): React
               primary={heading.text}
               primaryTypographyProps={{
                 variant: "caption",
-                noWrap: true,
-                fontSize: 12.5
+                noWrap: false,
+                fontSize: 12.5,
+                lineHeight: 1.45,
+                sx: {
+                  overflowWrap: "anywhere",
+                  wordBreak: "break-word"
+                }
               }}
             />
           </ListItemButton>
