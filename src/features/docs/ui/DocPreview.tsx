@@ -55,15 +55,43 @@ function formatBytes(bytes: number): string {
   return `${bytes} B`;
 }
 
-const CODE_TEXT_COLOR = "#1F2937";
-const INLINE_CODE_COLOR = "#0F3D4A";
+const ORANGE_CODE_COLOR = "#FF6A00";
+const INLINE_CODE_BG = "rgba(255,106,0,0.12)";
 const DOC_MARKDOWN_PATH_PATTERN = /(?:docs\/|\/|\.\.\/|\.\/)[^\s)\]`]+?\.md(?:#[^\s)\]`]+)?/g;
 
 const codeSyntaxTheme = Object.fromEntries(
   Object.entries(oneLight).map(([selector, style]) => {
-    return [selector, { ...(style as React.CSSProperties), color: CODE_TEXT_COLOR }];
+    return [selector, { ...(style as React.CSSProperties), color: ORANGE_CODE_COLOR }];
   })
 ) as typeof oneLight;
+
+type TextRange = {
+  start: number;
+  end: number;
+};
+
+function collectProtectedRanges(line: string): TextRange[] {
+  const ranges: TextRange[] = [];
+  const patterns = [/`[^`]*`/g, /\[[^\]]*]\([^)]+\)/g];
+
+  for (const pattern of patterns) {
+    pattern.lastIndex = 0;
+    let match = pattern.exec(line);
+    while (match) {
+      ranges.push({
+        start: match.index,
+        end: match.index + match[0].length
+      });
+      match = pattern.exec(line);
+    }
+  }
+
+  return ranges;
+}
+
+function isOffsetInRanges(offset: number, ranges: TextRange[]): boolean {
+  return ranges.some((range) => offset >= range.start && offset < range.end);
+}
 
 function autoLinkDocsMarkdownPaths(markdown: string): string {
   const lines = markdown.split(/\r?\n/);
@@ -89,8 +117,14 @@ function autoLinkDocsMarkdownPaths(markdown: string): string {
         return line;
       }
 
+      const protectedRanges = collectProtectedRanges(line);
+
       return line.replace(DOC_MARKDOWN_PATH_PATTERN, (matched, offset, source) => {
         const start = Number(offset);
+        if (isOffsetInRanges(start, protectedRanges)) {
+          return matched;
+        }
+
         const prefix = source.slice(Math.max(0, start - 2), start);
         if (prefix === "](") {
           return matched;
@@ -214,7 +248,7 @@ function CodeTextPreview({ content, filePath, location }: { content: string; fil
               >
                 {lineNumber}
               </Typography>
-              <Typography component="span" variant="caption" className="mono" sx={{ py: 0.3, color: CODE_TEXT_COLOR }}>
+              <Typography component="span" variant="caption" className="mono" sx={{ py: 0.3, color: ORANGE_CODE_COLOR }}>
                 {line || " "}
               </Typography>
             </Box>
@@ -548,8 +582,8 @@ export function DocPreview({
                               px: 0.6,
                               py: 0.2,
                               borderRadius: 0.6,
-                              bgcolor: "rgba(15,61,74,0.1)",
-                              color: INLINE_CODE_COLOR,
+                              bgcolor: INLINE_CODE_BG,
+                              color: ORANGE_CODE_COLOR,
                               fontSize: "0.88em"
                             }}
                           >
@@ -584,7 +618,7 @@ export function DocPreview({
                             borderRadius: "10px",
                             fontSize: "13px",
                             lineHeight: 1.65,
-                            background: "#F7FBFE"
+                            background: "#FFF8F1"
                           }}
                           codeTagProps={{
                             style: {
