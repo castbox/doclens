@@ -207,7 +207,7 @@ export function DocsWorkspace(): React.JSX.Element {
               position: "relative",
               p: { xs: 1, md: 1.25 },
               minHeight: "78vh",
-              overflow: "auto",
+              overflow: "visible",
               bgcolor: "rgba(255,255,255,0.94)"
             }}
           >

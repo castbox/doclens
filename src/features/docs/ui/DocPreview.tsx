@@ -768,9 +768,10 @@ export function DocPreview({
                     width: { xs: "100%", md: "clamp(220px, 24vw, 320px)" },
                     flexShrink: 0,
                     position: { xs: "static", md: "sticky" },
-                    top: { md: 8 },
+                    top: { md: 76 },
                     alignSelf: { md: "flex-start" },
-                    zIndex: 1
+                    zIndex: 2,
+                    height: "fit-content"
                   }}
                 >
                   <DocOutline headings={markdownHeadings} />
