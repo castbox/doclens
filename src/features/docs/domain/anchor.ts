@@ -3,6 +3,15 @@ export type LocationAnchor = {
   heading?: string;
 };
 
+export function stripPathAnchor(pathValue: string): string {
+  const hashIndex = pathValue.indexOf("#");
+  if (hashIndex < 0) {
+    return pathValue;
+  }
+
+  return pathValue.slice(0, hashIndex);
+}
+
 export function parseLocationAnchor(hashValue: string | null | undefined): LocationAnchor {
   if (!hashValue) {
     return {};

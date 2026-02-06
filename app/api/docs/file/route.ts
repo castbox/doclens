@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { stripPathAnchor } from "@/features/docs/domain/anchor";
 import { PathSecurityError } from "@/features/docs/domain/pathRules";
 import { readFilePreview, readRawFile } from "@/features/docs/services/docsFsService";
 import { badRequest, serverError } from "@/shared/utils/http";
@@ -9,10 +10,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     if (!pathParam) {
       return badRequest("path is required");
     }
+    const safePathParam = stripPathAnchor(pathParam);
+    if (!safePathParam) {
+      return badRequest("path is required");
+    }
 
     const raw = request.nextUrl.searchParams.get("raw") === "1";
     if (raw) {
-      const rawFile = await readRawFile(pathParam);
+      const rawFile = await readRawFile(safePathParam);
       return new NextResponse(rawFile.stream, {
         headers: {
           "Content-Type": rawFile.contentType,
@@ -21,7 +26,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       });
     }
 
-    const payload = await readFilePreview(pathParam);
+    const payload = await readFilePreview(safePathParam);
     return NextResponse.json(payload);
   } catch (error) {
     if (error instanceof PathSecurityError || error instanceof Error) {

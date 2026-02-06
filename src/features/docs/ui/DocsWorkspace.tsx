@@ -7,7 +7,7 @@ import { AppBar, Box, Button, Container, Divider, Drawer, Paper, Stack, Toolbar,
 import { useTheme } from "@mui/material/styles";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { parseLocationAnchor } from "@/features/docs/domain/anchor";
+import { parseLocationAnchor, stripPathAnchor } from "@/features/docs/domain/anchor";
 import { DocPreview } from "@/features/docs/ui/DocPreview";
 import { DocsTree } from "@/features/docs/ui/DocsTree";
 import { SearchPanel } from "@/features/search/ui/SearchPanel";
@@ -23,7 +23,8 @@ export function DocsWorkspace(): React.JSX.Element {
   const isLgUp = useMediaQuery(theme.breakpoints.up("lg"));
   const router = useRouter();
   const searchParams = useSearchParams();
-  const pathParam = searchParams.get("path") ?? "";
+  const rawPathParam = searchParams.get("path") ?? "";
+  const pathParam = React.useMemo(() => stripPathAnchor(rawPathParam), [rawPathParam]);
 
   const [selectedPath, setSelectedPath] = React.useState(pathParam);
   const [location, setLocation] = React.useState<{ line?: number; heading?: string }>({});
@@ -36,6 +37,20 @@ export function DocsWorkspace(): React.JSX.Element {
   React.useEffect(() => {
     setSelectedPath(pathParam);
   }, [pathParam]);
+
+  React.useEffect(() => {
+    const hashIndex = rawPathParam.indexOf("#");
+    if (hashIndex < 0) {
+      return;
+    }
+
+    const inlineAnchor = parseLocationAnchor(rawPathParam.slice(hashIndex));
+    if (!inlineAnchor.line && !inlineAnchor.heading) {
+      return;
+    }
+
+    setLocation(inlineAnchor);
+  }, [rawPathParam]);
 
   React.useEffect(() => {
     if (typeof window === "undefined") {
@@ -67,9 +82,10 @@ export function DocsWorkspace(): React.JSX.Element {
 
   const selectPath = React.useCallback(
     (path: string, line?: number) => {
+      const safePath = stripPathAnchor(path);
       const params = new URLSearchParams(searchParams.toString());
-      if (path) {
-        params.set("path", path);
+      if (safePath) {
+        params.set("path", safePath);
       } else {
         params.delete("path");
       }
