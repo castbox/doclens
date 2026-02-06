@@ -196,6 +196,7 @@ export function DocsWorkspace(): React.JSX.Element {
           <Paper
             variant="outlined"
             sx={{
+              position: "relative",
               p: { xs: 1, md: 1.25 },
               minHeight: "78vh",
               overflow: "auto",

@@ -463,7 +463,7 @@ export function DocPreview({
           ) : null}
 
           {data.kind === "markdown" ? (
-            <Stack direction={{ xs: "column", lg: "row" }} spacing={1.5}>
+            <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
               {(() => {
                 let headingRenderIndex = 0;
                 const renderHeading =
@@ -480,10 +480,14 @@ export function DocPreview({
                 sx={{
                   flex: 1,
                   p: { xs: 1.5, md: 2.25 },
-                  overflowX: "auto",
+                  overflowX: "hidden",
                   minHeight: 220,
                   maxWidth: { xs: "100%", xl: 900 },
                   "& p": { lineHeight: 1.72, color: "text.primary" },
+                  "& p, & li, & td, & th, & blockquote, & a": {
+                    overflowWrap: "anywhere",
+                    wordBreak: "break-word"
+                  },
                   "& h1, & h2, & h3, & h4, & h5, & h6": {
                     scrollMarginTop: 84,
                     lineHeight: 1.3
@@ -584,7 +588,10 @@ export function DocPreview({
                               borderRadius: 0.6,
                               bgcolor: INLINE_CODE_BG,
                               color: ORANGE_CODE_COLOR,
-                              fontSize: "0.88em"
+                              fontSize: "0.88em",
+                              whiteSpace: "pre-wrap",
+                              overflowWrap: "anywhere",
+                              wordBreak: "break-word"
                             }}
                           >
                             {value}
@@ -598,10 +605,14 @@ export function DocPreview({
                           style={codeSyntaxTheme}
                           showLineNumbers
                           wrapLines
+                          wrapLongLines
                           lineProps={(lineNumber) => ({
                             style: {
                               display: "block",
-                              backgroundColor: lineNumber % 2 === 0 ? "rgba(148,163,184,0.08)" : "transparent"
+                              backgroundColor: lineNumber % 2 === 0 ? "rgba(148,163,184,0.08)" : "transparent",
+                              whiteSpace: "pre-wrap",
+                              overflowWrap: "anywhere",
+                              wordBreak: "break-word"
                             }
                           })}
                           lineNumberStyle={{
@@ -618,11 +629,15 @@ export function DocPreview({
                             borderRadius: "10px",
                             fontSize: "13px",
                             lineHeight: 1.65,
-                            background: "#FFF8F1"
+                            background: "#FFF8F1",
+                            overflowX: "hidden"
                           }}
                           codeTagProps={{
                             style: {
-                              fontFamily: "var(--font-ibm-plex-mono)"
+                              fontFamily: "var(--font-ibm-plex-mono)",
+                              whiteSpace: "pre-wrap",
+                              overflowWrap: "anywhere",
+                              wordBreak: "break-word"
                             }
                           }}
                         >
@@ -639,11 +654,12 @@ export function DocPreview({
               })()}
               <Box
                 sx={{
-                  width: { xs: "100%", lg: 272 },
+                  width: { xs: "100%", md: 272 },
                   flexShrink: 0,
-                  position: { xs: "static", lg: "sticky" },
-                  top: { lg: 84 },
-                  alignSelf: { lg: "flex-start" }
+                  position: { xs: "static", md: "sticky" },
+                  top: { md: 8 },
+                  alignSelf: { md: "flex-start" },
+                  zIndex: 1
                 }}
               >
                 <DocOutline headings={markdownHeadings} />
