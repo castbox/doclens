@@ -19,6 +19,23 @@ type PrFileSnapshot = {
 let schemaReady = false;
 let activeSync: Promise<void> | null = null;
 
+function isDuplicateColumnError(error: unknown, columnName: string): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const messages = [error.message];
+  const cause = (error as { cause?: unknown }).cause;
+  if (cause instanceof Error) {
+    messages.push(cause.message);
+  }
+
+  return messages.some((message) => {
+    const normalized = message.toLowerCase();
+    return normalized.includes("duplicate column name") && normalized.includes(columnName.toLowerCase());
+  });
+}
+
 function toIso(value: Date | string | number | null): string | null {
   if (value === null) {
     return null;
@@ -56,7 +73,7 @@ async function addCategoryColumnIfMissing(): Promise<void> {
   try {
     await db.run(sql`ALTER TABLE pr_review_files ADD COLUMN category TEXT NOT NULL DEFAULT 'uncategorized';`);
   } catch (error) {
-    if (error instanceof Error && error.message.toLowerCase().includes("duplicate column name")) {
+    if (isDuplicateColumnError(error, "category")) {
       return;
     }
 
