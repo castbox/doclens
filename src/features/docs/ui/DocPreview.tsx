@@ -55,8 +55,8 @@ function formatBytes(bytes: number): string {
   return `${bytes} B`;
 }
 
-const ORANGE_CODE_COLOR = "#FF6A00";
-const INLINE_CODE_BG = "rgba(255,106,0,0.12)";
+const ORANGE_CODE_COLOR = "#E96900";
+const INLINE_CODE_BG = "#F8F8F8";
 const DOC_MARKDOWN_PATH_PATTERN = /(?:docs\/|\/|\.\.\/|\.\/)[^\s)\]`]+?\.md(?:#[^\s)\]`]+)?/g;
 
 const codeSyntaxTheme = Object.fromEntries(
@@ -213,7 +213,7 @@ function CodeTextPreview({ content, filePath, location }: { content: string; fil
           language: {languageFromFilePath(filePath)}
         </Typography>
       </Box>
-      <Box component="pre" sx={{ m: 0, p: 0, fontSize: 13, lineHeight: 1.62, minHeight: 200, whiteSpace: "pre" }}>
+      <Box component="pre" sx={{ m: 0, p: 0, fontSize: 13, lineHeight: 1.62, minHeight: 200, whiteSpace: "pre", bgcolor: "#F8F8F8" }}>
         {lines.map((line, index) => {
           const lineNumber = index + 1;
           const highlighted = location?.line === lineNumber;
@@ -227,7 +227,7 @@ function CodeTextPreview({ content, filePath, location }: { content: string; fil
                 display: "grid",
                 gridTemplateColumns: "58px 1fr",
                 px: 1.2,
-                bgcolor: highlighted ? "rgba(29,78,216,0.1)" : "transparent",
+                bgcolor: highlighted ? "#EFEFEF" : "#F8F8F8",
                 "&::before": {
                   content: '""',
                   position: "absolute",
@@ -584,9 +584,10 @@ export function DocPreview({
                           <Box
                             component="code"
                             sx={{
-                              px: 0.6,
-                              py: 0.2,
-                              borderRadius: 0.6,
+                              px: "5px",
+                              py: "3px",
+                              mx: "2px",
+                              borderRadius: "2px",
                               bgcolor: INLINE_CODE_BG,
                               color: ORANGE_CODE_COLOR,
                               fontSize: "0.88em",
@@ -610,7 +611,7 @@ export function DocPreview({
                           lineProps={(lineNumber) => ({
                             style: {
                               display: "block",
-                              backgroundColor: lineNumber % 2 === 0 ? "rgba(148,163,184,0.08)" : "transparent",
+                              backgroundColor: "transparent",
                               whiteSpace: "pre-wrap",
                               overflowWrap: "anywhere",
                               wordBreak: "break-word"
@@ -630,7 +631,7 @@ export function DocPreview({
                             borderRadius: "10px",
                             fontSize: "13px",
                             lineHeight: 1.65,
-                            background: "#FFF8F1",
+                            background: "#F8F8F8",
                             overflowX: "hidden"
                           }}
                           codeTagProps={{

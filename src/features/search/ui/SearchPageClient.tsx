@@ -29,7 +29,9 @@ export function SearchPageClient({ initialQuery }: { initialQuery: string }): Re
           <SearchPanel
             initialQuery={initialQuery}
             onOpenHit={(path, line) => {
-              router.push(`/docs/view?path=${encodeURIComponent(path)}&line=${line}`);
+              const params = new URLSearchParams({ path });
+              const hash = line > 0 ? `#L${line}` : "";
+              router.push(`/docs?${params.toString()}${hash}`);
             }}
           />
         </Paper>
