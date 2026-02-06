@@ -29,7 +29,7 @@ export function DocsWorkspace(): React.JSX.Element {
   const [selectedPath, setSelectedPath] = React.useState(pathParam);
   const [location, setLocation] = React.useState<{ line?: number; heading?: string }>({});
   const [showSearch, setShowSearch] = React.useState(true);
-  const [docsDrawerOpen, setDocsDrawerOpen] = React.useState(true);
+  const [docsDrawerOpen, setDocsDrawerOpen] = React.useState(false);
   const [reviewDrawerOpen, setReviewDrawerOpen] = React.useState(false);
   const [reviewRefreshToken, setReviewRefreshToken] = React.useState(0);
   const latestReadPath = React.useRef("");
