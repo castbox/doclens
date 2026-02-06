@@ -65,8 +65,11 @@ export type PrFileRecord = {
   path: string;
   name: string;
   dateFolder: string;
+  category: string;
   createdAt: string;
   modifiedAt: string;
   isRead: boolean;
   readAt: string | null;
 };
+
+export type PrFileReadFilter = "all" | "read" | "unread";

@@ -23,6 +23,7 @@ import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
 import rehypeSlug from "rehype-slug";
 import remarkGfm from "remark-gfm";
 import type { FilePreviewPayload } from "@/features/docs/domain/types";
+import { extractMarkdownHeadings } from "@/features/docs/domain/markdownHeading";
 import { DocBreadcrumb } from "@/features/docs/ui/DocBreadcrumb";
 import { DocOutline } from "@/features/docs/ui/DocOutline";
 import { EmptyState, LoadingState } from "@/shared/ui/StateCard";
@@ -126,6 +127,13 @@ export function DocPreview({
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
   const [copyFeedback, setCopyFeedback] = React.useState<{ severity: "success" | "error"; message: string } | null>(null);
+  const markdownHeadings = React.useMemo(() => {
+    if (!data || data.kind !== "markdown") {
+      return [];
+    }
+
+    return extractMarkdownHeadings(data.content);
+  }, [data]);
 
   React.useEffect(() => {
     if (!path) {
@@ -175,13 +183,17 @@ export function DocPreview({
     }
 
     if (location?.heading) {
-      const headingId = location.heading.toLowerCase().replace(/\s+/g, "-");
-      const headingElement = document.getElementById(headingId);
+      const decodedHeading = decodeURIComponent(location.heading);
+      const byId = document.getElementById(decodedHeading);
+      const normalizedId = decodedHeading.toLowerCase().replace(/\s+/g, "-");
+      const byNormalizedId = document.getElementById(normalizedId);
+      const matchedHeading = markdownHeadings.find((heading) => heading.slug === decodedHeading || heading.text === decodedHeading);
+      const headingElement = byId ?? byNormalizedId ?? (matchedHeading ? document.getElementById(matchedHeading.slug) : null);
       if (headingElement) {
         headingElement.scrollIntoView({ behavior: "smooth", block: "start" });
       }
     }
-  }, [data, location?.heading]);
+  }, [data, location?.heading, markdownHeadings]);
 
   if (!path) {
     return <EmptyState title="请选择文件" description="从左侧目录树选择一个文档开始预览" />;
@@ -281,6 +293,17 @@ export function DocPreview({
 
           {data.kind === "markdown" ? (
             <Stack direction={{ xs: "column", lg: "row" }} spacing={2}>
+              {(() => {
+                let headingRenderIndex = 0;
+                const renderHeading =
+                  (tag: "h1" | "h2" | "h3" | "h4" | "h5" | "h6") =>
+                  ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>): React.JSX.Element => {
+                    const heading = markdownHeadings[headingRenderIndex];
+                    headingRenderIndex += 1;
+                    return React.createElement(tag, { ...props, id: heading?.slug }, children);
+                  };
+
+                return (
               <Paper
                 variant="outlined"
                 sx={{
@@ -320,6 +343,12 @@ export function DocPreview({
                   remarkPlugins={[remarkGfm]}
                   rehypePlugins={[rehypeSlug]}
                   components={{
+                    h1: renderHeading("h1"),
+                    h2: renderHeading("h2"),
+                    h3: renderHeading("h3"),
+                    h4: renderHeading("h4"),
+                    h5: renderHeading("h5"),
+                    h6: renderHeading("h6"),
                     code({ className, children }) {
                       const rawValue = String(children ?? "");
                       const value = rawValue.replace(/\n$/, "");
@@ -387,8 +416,10 @@ export function DocPreview({
                   {data.content}
                 </ReactMarkdown>
               </Paper>
+                );
+              })()}
               <Box sx={{ width: { xs: "100%", lg: 260 }, flexShrink: 0 }}>
-                <DocOutline markdown={data.content} />
+                <DocOutline headings={markdownHeadings} />
               </Box>
             </Stack>
           ) : null}

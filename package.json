@@ -20,6 +20,7 @@
     "@mui/material-nextjs": "^5.16.7",
     "better-sqlite3": "^11.7.2",
     "drizzle-orm": "^0.38.3",
+    "github-slugger": "^2.0.0",
     "gray-matter": "^4.0.3",
     "next": "^14.2.23",
     "react": "^18.3.1",

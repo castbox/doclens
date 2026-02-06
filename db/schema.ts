@@ -33,6 +33,7 @@ export const prReviewFiles = sqliteTable("pr_review_files", {
   path: text("path").primaryKey(),
   name: text("name").notNull(),
   dateFolder: text("date_folder").notNull(),
+  category: text("category").notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   modifiedAt: integer("modified_at", { mode: "timestamp" }).notNull(),
   isRead: integer("is_read", { mode: "boolean" }).notNull().default(false),

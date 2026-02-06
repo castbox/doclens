@@ -17,13 +17,13 @@ import {
   TextField,
   Typography
 } from "@mui/material";
-import type { PrFileRecord } from "@/features/reviews/domain/types";
+import type { PrFileReadFilter, PrFileRecord } from "@/features/reviews/domain/types";
 import { formatDateTime } from "@/shared/domain/time";
 import { EmptyState, LoadingState } from "@/shared/ui/StateCard";
 
 type PrFilesPayload = {
   files?: PrFileRecord[];
-  dates?: string[];
+  categories?: string[];
   error?: string;
 };
 
@@ -38,21 +38,11 @@ export function ReviewDrawer({
 }): React.JSX.Element {
   const [open, setOpen] = React.useState(true);
   const [files, setFiles] = React.useState<PrFileRecord[]>([]);
-  const [dates, setDates] = React.useState<string[]>([]);
-  const [dateFilter, setDateFilter] = React.useState("");
-  const [keywordInput, setKeywordInput] = React.useState("");
-  const [keyword, setKeyword] = React.useState("");
+  const [categories, setCategories] = React.useState<string[]>([]);
+  const [categoryFilter, setCategoryFilter] = React.useState("");
+  const [readFilter, setReadFilter] = React.useState<PrFileReadFilter>("all");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
-
-  React.useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setKeyword(keywordInput.trim());
-    }, 220);
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [keywordInput]);
 
   const loadFiles = React.useCallback(async () => {
     setLoading(true);
@@ -60,27 +50,25 @@ export function ReviewDrawer({
 
     try {
       const params = new URLSearchParams();
-      if (dateFilter) {
-        params.set("date", dateFilter);
+      if (categoryFilter) {
+        params.set("category", categoryFilter);
       }
-      if (keyword) {
-        params.set("q", keyword);
-      }
+      params.set("read", readFilter);
 
       const response = await fetch(`/api/reviews/pr-files?${params.toString()}`);
       const payload = (await response.json()) as PrFilesPayload;
-      if (!response.ok || !payload.files || !payload.dates) {
+      if (!response.ok || !payload.files || !payload.categories) {
         throw new Error(payload.error ?? "加载 PR 文件失败");
       }
 
       setFiles(payload.files);
-      setDates(payload.dates);
+      setCategories(payload.categories);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "加载 PR 文件失败");
     } finally {
       setLoading(false);
     }
-  }, [dateFilter, keyword]);
+  }, [categoryFilter, readFilter]);
 
   React.useEffect(() => {
     void loadFiles();
@@ -136,30 +124,34 @@ export function ReviewDrawer({
           <TextField
             select
             size="small"
-            label="日期目录"
-            value={dateFilter}
+            label="类别"
+            value={categoryFilter}
             onChange={(event) => {
-              setDateFilter(event.target.value);
+              setCategoryFilter(event.target.value);
             }}
             sx={{ minWidth: 140 }}
           >
             <MenuItem value="">全部</MenuItem>
-            {dates.map((date) => (
-              <MenuItem key={date} value={date}>
-                {date}
+            {categories.map((category) => (
+              <MenuItem key={category} value={category}>
+                {category}
               </MenuItem>
             ))}
           </TextField>
           <TextField
+            select
             size="small"
-            label="关键词"
-            placeholder="按路径/文件名搜索"
-            value={keywordInput}
+            label="已读状态"
+            value={readFilter}
             onChange={(event) => {
-              setKeywordInput(event.target.value);
+              setReadFilter(event.target.value as PrFileReadFilter);
             }}
-            fullWidth
-          />
+            sx={{ minWidth: 130 }}
+          >
+            <MenuItem value="all">全部</MenuItem>
+            <MenuItem value="read">已读</MenuItem>
+            <MenuItem value="unread">未读</MenuItem>
+          </TextField>
         </Stack>
 
         {loading ? <LoadingState label="加载 PR 文件..." /> : null}
@@ -196,7 +188,7 @@ export function ReviewDrawer({
                       </Typography>
                       <Stack direction="row" justifyContent="space-between" alignItems="center" mt={0.75}>
                         <Typography variant="caption" color="text.secondary">
-                          日期目录：{item.dateFolder}
+                          类别：{item.category}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
                           创建：{formatDateTime(item.createdAt)}

@@ -3,7 +3,7 @@ import path from "node:path";
 import { and, desc, eq, lt, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { prReviewFiles } from "@/db/schema";
-import type { PrFileRecord } from "@/features/reviews/domain/types";
+import type { PrFileReadFilter, PrFileRecord } from "@/features/reviews/domain/types";
 import { resolveDocsPath } from "@/features/docs/domain/pathRules";
 import { getConfig } from "@/shared/utils/env";
 
@@ -11,6 +11,7 @@ type PrFileSnapshot = {
   path: string;
   name: string;
   dateFolder: string;
+  category: string;
   createdAt: Date;
   modifiedAt: Date;
 };
@@ -44,11 +45,31 @@ function extractDateFolder(relativePath: string): string {
   return segments.length >= 3 ? segments[1] : "unknown";
 }
 
+function extractCategory(relativePath: string): string {
+  const segments = relativePath.split("/");
+  return segments.length >= 4 ? segments[2] : "uncategorized";
+}
+
+async function addCategoryColumnIfMissing(): Promise<void> {
+  const db = getDb();
+
+  try {
+    await db.run(sql`ALTER TABLE pr_review_files ADD COLUMN category TEXT NOT NULL DEFAULT 'uncategorized';`);
+  } catch (error) {
+    if (error instanceof Error && error.message.toLowerCase().includes("duplicate column name")) {
+      return;
+    }
+
+    throw error;
+  }
+}
+
 function mapPrFile(row: typeof prReviewFiles.$inferSelect): PrFileRecord {
   return {
     path: row.path,
     name: row.name,
     dateFolder: row.dateFolder,
+    category: row.category ?? "uncategorized",
     createdAt: toIso(row.createdAt) ?? new Date(0).toISOString(),
     modifiedAt: toIso(row.modifiedAt) ?? new Date(0).toISOString(),
     isRead: Boolean(row.isRead),
@@ -67,6 +88,7 @@ async function ensurePrFilesSchema(): Promise<void> {
       path TEXT PRIMARY KEY NOT NULL,
       name TEXT NOT NULL,
       date_folder TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'uncategorized',
       created_at INTEGER NOT NULL,
       modified_at INTEGER NOT NULL,
       is_read INTEGER NOT NULL DEFAULT 0,
@@ -74,7 +96,9 @@ async function ensurePrFilesSchema(): Promise<void> {
       last_seen_at INTEGER NOT NULL
     );
   `);
+  await addCategoryColumnIfMissing();
   await db.run(sql`CREATE INDEX IF NOT EXISTS pr_review_files_date_idx ON pr_review_files(date_folder);`);
+  await db.run(sql`CREATE INDEX IF NOT EXISTS pr_review_files_category_idx ON pr_review_files(category);`);
   await db.run(sql`CREATE INDEX IF NOT EXISTS pr_review_files_created_idx ON pr_review_files(created_at DESC);`);
 
   schemaReady = true;
@@ -107,6 +131,7 @@ async function walkPrFiles(absoluteDir: string, relativeDir: string, files: PrFi
       path: docRelativePath,
       name: entry.name,
       dateFolder: extractDateFolder(docRelativePath),
+      category: extractCategory(docRelativePath),
       createdAt,
       modifiedAt: stats.mtime
     });
@@ -154,6 +179,7 @@ export async function syncPrFilesSnapshot(): Promise<void> {
           path: file.path,
           name: file.name,
           dateFolder: file.dateFolder,
+          category: file.category,
           createdAt: file.createdAt,
           modifiedAt: file.modifiedAt,
           lastSeenAt: now
@@ -163,6 +189,7 @@ export async function syncPrFilesSnapshot(): Promise<void> {
           set: {
             name: file.name,
             dateFolder: file.dateFolder,
+            category: file.category,
             createdAt: file.createdAt,
             modifiedAt: file.modifiedAt,
             lastSeenAt: now
@@ -178,11 +205,10 @@ export async function syncPrFilesSnapshot(): Promise<void> {
   return activeSync;
 }
 
-export async function listPrFiles(filter?: { dateFolder?: string; query?: string }): Promise<PrFileRecord[]> {
+export async function listPrFiles(filter?: { category?: string; readFilter?: PrFileReadFilter }): Promise<PrFileRecord[]> {
   await ensurePrFilesSchema();
   const db = getDb();
   const rows = await db.select().from(prReviewFiles).orderBy(desc(prReviewFiles.createdAt), desc(prReviewFiles.modifiedAt));
-  const query = filter?.query?.trim().toLowerCase();
 
   return rows
     .filter((row) => {
@@ -190,24 +216,28 @@ export async function listPrFiles(filter?: { dateFolder?: string; query?: string
         return false;
       }
 
-      if (filter?.dateFolder && row.dateFolder !== filter.dateFolder) {
+      if (filter?.category && row.category !== filter.category) {
         return false;
       }
 
-      if (!query) {
-        return true;
+      if (filter?.readFilter === "read") {
+        return Boolean(row.isRead);
       }
 
-      return row.path.toLowerCase().includes(query) || row.name.toLowerCase().includes(query);
+      if (filter?.readFilter === "unread") {
+        return !row.isRead;
+      }
+
+      return true;
     })
     .map(mapPrFile);
 }
 
-export async function listPrDateFolders(): Promise<string[]> {
+export async function listPrCategories(): Promise<string[]> {
   await ensurePrFilesSchema();
   const db = getDb();
-  const rows = await db.select({ dateFolder: prReviewFiles.dateFolder }).from(prReviewFiles);
-  return Array.from(new Set(rows.map((row) => row.dateFolder))).sort((a, b) => b.localeCompare(a, "zh-CN"));
+  const rows = await db.select({ category: prReviewFiles.category }).from(prReviewFiles);
+  return Array.from(new Set(rows.map((row) => row.category))).sort((a, b) => a.localeCompare(b, "zh-CN"));
 }
 
 export async function markPrFileRead(inputPath: string, isRead = true): Promise<PrFileRecord | null> {

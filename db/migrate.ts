@@ -43,6 +43,7 @@ async function main() {
       path TEXT PRIMARY KEY NOT NULL,
       name TEXT NOT NULL,
       date_folder TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'uncategorized',
       created_at INTEGER NOT NULL,
       modified_at INTEGER NOT NULL,
       is_read INTEGER NOT NULL DEFAULT 0,
@@ -51,7 +52,16 @@ async function main() {
     );
   `);
 
+  try {
+    await db.run(sql`ALTER TABLE pr_review_files ADD COLUMN category TEXT NOT NULL DEFAULT 'uncategorized';`);
+  } catch (error) {
+    if (!(error instanceof Error) || !error.message.toLowerCase().includes("duplicate column name")) {
+      throw error;
+    }
+  }
+
   await db.run(sql`CREATE INDEX IF NOT EXISTS pr_review_files_date_idx ON pr_review_files(date_folder);`);
+  await db.run(sql`CREATE INDEX IF NOT EXISTS pr_review_files_category_idx ON pr_review_files(category);`);
   await db.run(sql`CREATE INDEX IF NOT EXISTS pr_review_files_created_idx ON pr_review_files(created_at DESC);`);
 }
 

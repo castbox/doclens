@@ -1,18 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ensurePrFilesWatcherStarted } from "@/features/reviews/services/prFilesSyncService";
-import { listPrDateFolders, listPrFiles, syncPrFilesSnapshot } from "@/features/reviews/services/prFilesRepo";
+import { listPrCategories, listPrFiles, syncPrFilesSnapshot } from "@/features/reviews/services/prFilesRepo";
+import type { PrFileReadFilter } from "@/features/reviews/domain/types";
 import { badRequest, serverError } from "@/shared/utils/http";
+
+const VALID_READ_FILTERS: PrFileReadFilter[] = ["all", "read", "unread"];
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     ensurePrFilesWatcherStarted();
     await syncPrFilesSnapshot();
 
-    const dateFolder = request.nextUrl.searchParams.get("date") ?? undefined;
-    const query = request.nextUrl.searchParams.get("q") ?? undefined;
+    const category = request.nextUrl.searchParams.get("category") ?? undefined;
+    const readFilterParam = (request.nextUrl.searchParams.get("read") ?? "all") as PrFileReadFilter;
+    if (!VALID_READ_FILTERS.includes(readFilterParam)) {
+      return badRequest("read filter is invalid");
+    }
 
-    const [files, dates] = await Promise.all([listPrFiles({ dateFolder, query }), listPrDateFolders()]);
-    return NextResponse.json({ files, dates });
+    const [files, categories] = await Promise.all([listPrFiles({ category, readFilter: readFilterParam }), listPrCategories()]);
+    return NextResponse.json({ files, categories });
   } catch (error) {
     if (error instanceof Error) {
       return badRequest(error.message);
