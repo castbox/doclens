@@ -4,7 +4,14 @@ import { Alert, Box, CircularProgress, Typography } from "@mui/material";
 
 export function LoadingState({ label = "加载中..." }: { label?: string }): React.JSX.Element {
   return (
-    <Box display="flex" alignItems="center" justifyContent="center" minHeight={140} gap={1.5}>
+    <Box
+      display="flex"
+      alignItems="center"
+      justifyContent="center"
+      minHeight={140}
+      gap={1.5}
+      sx={{ border: "1px dashed", borderColor: "divider", borderRadius: 1.5, bgcolor: "rgba(255,255,255,0.7)" }}
+    >
       <CircularProgress size={22} />
       <Typography variant="body2">{label}</Typography>
     </Box>
@@ -13,7 +20,7 @@ export function LoadingState({ label = "加载中..." }: { label?: string }): Re
 
 export function EmptyState({ title, description }: { title: string; description?: string }): React.JSX.Element {
   return (
-    <Box p={3} textAlign="center">
+    <Box p={3} textAlign="center" sx={{ border: "1px dashed", borderColor: "divider", borderRadius: 1.5, bgcolor: "rgba(255,255,255,0.7)" }}>
       <Typography variant="subtitle1" fontWeight={600}>
         {title}
       </Typography>

@@ -14,6 +14,8 @@ import { SearchPanel } from "@/features/search/ui/SearchPanel";
 import { ReviewDrawer } from "@/features/reviews/ui/ReviewDrawer";
 
 const DOCS_DRAWER_WIDTH = 320;
+const REVIEW_DRAWER_WIDTH = 360;
+const APP_HEADER_HEIGHT = 64;
 
 export function DocsWorkspace(): React.JSX.Element {
   const theme = useTheme();
@@ -80,8 +82,18 @@ export function DocsWorkspace(): React.JSX.Element {
 
   return (
     <Box sx={{ minHeight: "100dvh" }}>
-      <AppBar position="sticky" color="transparent" elevation={0} sx={{ backdropFilter: "blur(10px)", borderBottom: "1px solid #D7E4EE", bgcolor: "rgba(248,252,255,0.82)" }}>
-        <Toolbar sx={{ minHeight: "64px !important" }}>
+      <AppBar
+        position="sticky"
+        color="transparent"
+        elevation={0}
+        sx={{
+          backdropFilter: "blur(10px)",
+          borderBottom: "1px solid",
+          borderColor: "divider",
+          bgcolor: "rgba(243,247,251,0.86)"
+        }}
+      >
+        <Toolbar sx={{ minHeight: `${APP_HEADER_HEIGHT}px !important`, px: { xs: 1, md: 1.5 } }}>
           <Stack direction="row" alignItems="center" justifyContent="space-between" width="100%" gap={1} flexWrap="wrap">
             <Stack direction="row" alignItems="center" gap={1.2}>
               <Typography variant="h6" fontWeight={800} letterSpacing="-0.02em">
@@ -92,7 +104,7 @@ export function DocsWorkspace(): React.JSX.Element {
               </Typography>
             </Stack>
 
-            <Stack direction="row" gap={1}>
+            <Stack direction="row" gap={1} flexWrap="wrap">
               <Button
                 size="small"
                 variant={docsDrawerOpen ? "contained" : "outlined"}
@@ -132,10 +144,12 @@ export function DocsWorkspace(): React.JSX.Element {
           "& .MuiDrawer-paper": {
             width: DOCS_DRAWER_WIDTH,
             boxSizing: "border-box",
-            p: 1.25,
-            borderRight: "1px solid #D7E4EE",
-            top: 64,
-            height: "calc(100dvh - 64px)"
+            p: { xs: 1.2, md: 1.25 },
+            borderRight: "1px solid",
+            borderColor: "divider",
+            bgcolor: "background.paper",
+            top: APP_HEADER_HEIGHT,
+            height: `calc(100dvh - ${APP_HEADER_HEIGHT}px)`
           }
         }}
       >
@@ -159,16 +173,16 @@ export function DocsWorkspace(): React.JSX.Element {
       <Container
         maxWidth={false}
         sx={{
-          py: 1.25,
-          px: { xs: 1, md: 1.5 },
-          pl: { xs: 1, md: docsDrawerOpen ? "336px" : 1.5 },
-          pr: { lg: "380px" },
+          py: { xs: 1.5, md: 1.25 },
+          px: { xs: 1, sm: 1.25, md: 1.5 },
+          pl: { xs: 1, md: docsDrawerOpen ? `${DOCS_DRAWER_WIDTH + 16}px` : 1.5 },
+          pr: { xs: 1, sm: 1.25, md: 1.5, lg: `${REVIEW_DRAWER_WIDTH + 20}px` },
           transition: "padding 180ms ease"
         }}
       >
-        <Stack spacing={1.25}>
+        <Stack spacing={1.2}>
           {showSearch ? (
-            <Paper variant="outlined" sx={{ p: 1.25 }}>
+            <Paper variant="outlined" sx={{ p: { xs: 1, md: 1.2 }, bgcolor: "rgba(255,255,255,0.9)" }}>
               <SearchPanel
                 initialQuery=""
                 scope=""
@@ -179,7 +193,15 @@ export function DocsWorkspace(): React.JSX.Element {
             </Paper>
           ) : null}
 
-          <Paper variant="outlined" sx={{ p: { xs: 1, md: 1.25 }, minHeight: "78vh", overflow: "auto" }}>
+          <Paper
+            variant="outlined"
+            sx={{
+              p: { xs: 1, md: 1.25 },
+              minHeight: "78vh",
+              overflow: "auto",
+              bgcolor: "rgba(255,255,255,0.94)"
+            }}
+          >
             <DocPreview
               path={selectedPath}
               location={location}

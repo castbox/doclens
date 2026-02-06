@@ -6,11 +6,12 @@ export function DocBreadcrumb({ path, onNavigate }: { path: string; onNavigate: 
   const parts = path.split("/").filter(Boolean);
 
   return (
-    <Breadcrumbs aria-label="breadcrumb" sx={{ mb: 1 }}>
+    <Breadcrumbs aria-label="breadcrumb" sx={{ mb: 1, "& .MuiBreadcrumbs-li": { maxWidth: 260 } }}>
       <Link
         component="button"
         underline="hover"
         color="inherit"
+        sx={{ fontSize: 13, color: "text.secondary", cursor: "pointer" }}
         onClick={() => {
           onNavigate("");
         }}
@@ -22,7 +23,7 @@ export function DocBreadcrumb({ path, onNavigate }: { path: string; onNavigate: 
         const isLast = index === parts.length - 1;
 
         return isLast ? (
-          <Typography key={partialPath} color="text.primary" fontWeight={600}>
+          <Typography key={partialPath} color="text.primary" fontWeight={600} noWrap sx={{ fontSize: 13 }}>
             {part}
           </Typography>
         ) : (
@@ -31,6 +32,7 @@ export function DocBreadcrumb({ path, onNavigate }: { path: string; onNavigate: 
             component="button"
             underline="hover"
             color="inherit"
+            sx={{ fontSize: 13, color: "text.secondary", cursor: "pointer" }}
             onClick={() => {
               onNavigate(partialPath);
             }}

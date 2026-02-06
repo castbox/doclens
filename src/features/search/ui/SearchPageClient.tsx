@@ -9,11 +9,11 @@ export function SearchPageClient({ initialQuery }: { initialQuery: string }): Re
   const router = useRouter();
 
   return (
-    <Container maxWidth="lg" sx={{ py: 2 }}>
+    <Container maxWidth="lg" sx={{ py: { xs: 1.5, md: 2 } }}>
       <Stack spacing={1.25}>
         <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1}>
           <Box>
-            <Typography variant="h5" fontWeight={800}>
+            <Typography variant="h5" fontWeight={800} letterSpacing="-0.02em">
               全局搜索
             </Typography>
             <Typography variant="body2" color="text.secondary">
@@ -25,7 +25,7 @@ export function SearchPageClient({ initialQuery }: { initialQuery: string }): Re
           </Button>
         </Stack>
 
-        <Paper variant="outlined" sx={{ p: 1.25 }}>
+        <Paper variant="outlined" sx={{ p: { xs: 1, md: 1.25 }, bgcolor: "rgba(255,255,255,0.92)" }}>
           <SearchPanel
             initialQuery={initialQuery}
             onOpenHit={(path, line) => {

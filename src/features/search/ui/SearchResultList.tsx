@@ -15,7 +15,7 @@ export function SearchResultList({
   onPageChange: (page: number) => void;
 }): React.JSX.Element {
   if (result.total === 0) {
-    return <EmptyState title="没有匹配结果" description="调整关键词或筛选条件后再试" />;
+    return <EmptyState title="没有匹配结果" description="可以尝试缩短关键词、切换文件类型，或更换目录范围后重试" />;
   }
 
   const totalPages = Math.max(1, Math.ceil(result.total / result.size));
@@ -29,17 +29,22 @@ export function SearchResultList({
         <Chip size="small" variant="outlined" label={`page ${result.page}/${totalPages}`} />
       </Stack>
 
-      <Paper variant="outlined" sx={{ overflow: "hidden" }}>
+      <Paper variant="outlined" sx={{ overflow: "hidden", bgcolor: "rgba(255,255,255,0.9)" }}>
         <List disablePadding>
           {result.hits.map((hit) => (
             <React.Fragment key={`${hit.path}:${hit.line}:${hit.column}`}>
               <ListItemButton
                 sx={{
                   alignItems: "flex-start",
-                  py: 1.2,
-                  px: 1.5,
+                  py: 1.1,
+                  px: 1.25,
                   cursor: "pointer",
-                  transition: "background-color 220ms ease"
+                  borderBottom: "1px solid",
+                  borderColor: "divider",
+                  transition: "background-color 180ms ease, border-color 180ms ease",
+                  "&:hover": {
+                    bgcolor: "action.hover"
+                  }
                 }}
                 onClick={() => {
                   onOpenHit(hit.path, hit.line);
@@ -51,7 +56,7 @@ export function SearchResultList({
                       <Typography className="mono" variant="body2" color="primary" sx={{ fontWeight: 600 }}>
                         {hit.path}
                       </Typography>
-                      <Chip size="small" label={`L${hit.line}`} />
+                      <Chip size="small" label={`L${hit.line}`} variant="outlined" />
                     </Stack>
                   }
                   secondary={
@@ -65,8 +70,8 @@ export function SearchResultList({
                           textOverflow: "ellipsis",
                           whiteSpace: "nowrap",
                           "& mark": {
-                            backgroundColor: "#facc15",
-                            color: "inherit",
+                            backgroundColor: "rgba(15,23,42,0.1)",
+                            color: "#0F172A",
                             px: 0.25,
                             borderRadius: 0.5
                           }

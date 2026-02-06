@@ -55,12 +55,13 @@ function formatBytes(bytes: number): string {
   return `${bytes} B`;
 }
 
-const ORANGE_CODE_COLOR = "#C2410C";
+const CODE_TEXT_COLOR = "#1F2937";
+const INLINE_CODE_COLOR = "#0F3D4A";
 const DOC_MARKDOWN_PATH_PATTERN = /(?:docs\/|\/|\.\.\/|\.\/)[^\s)\]`]+?\.md(?:#[^\s)\]`]+)?/g;
 
-const orangeSyntaxTheme = Object.fromEntries(
+const codeSyntaxTheme = Object.fromEntries(
   Object.entries(oneLight).map(([selector, style]) => {
-    return [selector, { ...(style as React.CSSProperties), color: ORANGE_CODE_COLOR }];
+    return [selector, { ...(style as React.CSSProperties), color: CODE_TEXT_COLOR }];
   })
 ) as typeof oneLight;
 
@@ -173,12 +174,12 @@ function CodeTextPreview({ content, filePath, location }: { content: string; fil
 
   return (
     <Paper variant="outlined" sx={{ overflow: "auto", borderRadius: 1.5 }}>
-      <Box sx={{ px: 1.5, py: 1, borderBottom: "1px solid", borderColor: "divider", bgcolor: "rgba(11,114,133,0.06)" }}>
+      <Box sx={{ px: 1.5, py: 1, borderBottom: "1px solid", borderColor: "divider", bgcolor: "rgba(238,243,248,0.85)" }}>
         <Typography variant="caption" className="mono" color="text.secondary">
           language: {languageFromFilePath(filePath)}
         </Typography>
       </Box>
-      <Box component="pre" sx={{ m: 0, p: 0, fontSize: 13, lineHeight: 1.6, minHeight: 200, whiteSpace: "pre" }}>
+      <Box component="pre" sx={{ m: 0, p: 0, fontSize: 13, lineHeight: 1.62, minHeight: 200, whiteSpace: "pre" }}>
         {lines.map((line, index) => {
           const lineNumber = index + 1;
           const highlighted = location?.line === lineNumber;
@@ -188,10 +189,20 @@ function CodeTextPreview({ content, filePath, location }: { content: string; fil
               key={lineNumber}
               id={`line-${lineNumber}`}
               sx={{
+                position: "relative",
                 display: "grid",
-                gridTemplateColumns: "56px 1fr",
-                px: 1,
-                bgcolor: highlighted ? "rgba(29,78,216,0.12)" : "transparent"
+                gridTemplateColumns: "58px 1fr",
+                px: 1.2,
+                bgcolor: highlighted ? "rgba(29,78,216,0.1)" : "transparent",
+                "&::before": {
+                  content: '""',
+                  position: "absolute",
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: 2.5,
+                  backgroundColor: highlighted ? "secondary.main" : "transparent"
+                }
               }}
             >
               <Typography
@@ -199,11 +210,11 @@ function CodeTextPreview({ content, filePath, location }: { content: string; fil
                 variant="caption"
                 className="mono"
                 color="text.secondary"
-                sx={{ userSelect: "none", py: 0.25 }}
+                sx={{ userSelect: "none", py: 0.3 }}
               >
                 {lineNumber}
               </Typography>
-              <Typography component="span" variant="caption" className="mono" sx={{ py: 0.25, color: ORANGE_CODE_COLOR }}>
+              <Typography component="span" variant="caption" className="mono" sx={{ py: 0.3, color: CODE_TEXT_COLOR }}>
                 {line || " "}
               </Typography>
             </Box>
@@ -323,12 +334,12 @@ export function DocPreview({
   }
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-      <Box>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25 }}>
+      <Box sx={{ p: 0.2 }}>
         <DocBreadcrumb path={path} onNavigate={onNavigatePath} />
         <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1} flexWrap="wrap">
           <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap">
-            <Typography variant="h6" sx={{ lineHeight: 1.2 }}>
+            <Typography variant="h6" sx={{ lineHeight: 1.2, fontWeight: 700 }}>
               {path.split("/").pop()}
             </Typography>
             {data ? (
@@ -346,6 +357,7 @@ export function DocPreview({
               <IconButton
                 size="small"
                 aria-label="copy path"
+                sx={{ border: "1px solid", borderColor: "divider", bgcolor: "background.paper" }}
                 onClick={async () => {
                   await navigator.clipboard.writeText(`docs/${path}`);
                   setCopyFeedback({
@@ -362,6 +374,7 @@ export function DocPreview({
                 <IconButton
                   size="small"
                   aria-label="copy markdown source"
+                  sx={{ border: "1px solid", borderColor: "divider", bgcolor: "background.paper" }}
                   onClick={async () => {
                     try {
                       const response = await fetch(`/api/docs/file?path=${encodeURIComponent(path)}&raw=1`);
@@ -391,6 +404,7 @@ export function DocPreview({
               <IconButton
                 size="small"
                 aria-label="open raw"
+                sx={{ border: "1px solid", borderColor: "divider", bgcolor: "background.paper" }}
                 component="a"
                 href={`/api/docs/file?path=${encodeURIComponent(path)}&raw=1`}
                 target="_blank"
@@ -415,7 +429,7 @@ export function DocPreview({
           ) : null}
 
           {data.kind === "markdown" ? (
-            <Stack direction={{ xs: "column", lg: "row" }} spacing={2}>
+            <Stack direction={{ xs: "column", lg: "row" }} spacing={1.5}>
               {(() => {
                 let headingRenderIndex = 0;
                 const renderHeading =
@@ -431,10 +445,15 @@ export function DocPreview({
                 variant="outlined"
                 sx={{
                   flex: 1,
-                  p: { xs: 1.5, md: 2.5 },
+                  p: { xs: 1.5, md: 2.25 },
                   overflowX: "auto",
                   minHeight: 220,
-                  "& p": { lineHeight: 1.75 },
+                  maxWidth: { xs: "100%", xl: 900 },
+                  "& p": { lineHeight: 1.72, color: "text.primary" },
+                  "& h1, & h2, & h3, & h4, & h5, & h6": {
+                    scrollMarginTop: 84,
+                    lineHeight: 1.3
+                  },
                   "& blockquote": {
                     m: 0,
                     px: 1.5,
@@ -459,6 +478,9 @@ export function DocPreview({
                   },
                   "& code": {
                     fontFamily: "var(--font-ibm-plex-mono)"
+                  },
+                  "& ul, & ol": {
+                    paddingInlineStart: "1.5rem"
                   }
                 }}
               >
@@ -481,7 +503,7 @@ export function DocPreview({
                         return (
                           <a
                             href={`/docs?path=${encodeURIComponent(targetPath)}${targetHash}`}
-                            style={{ color: "var(--mui-palette-primary-main)", textDecoration: "underline", cursor: "pointer" }}
+                            style={{ color: "var(--mui-palette-secondary-main)", textDecoration: "underline", cursor: "pointer" }}
                             onClick={(event) => {
                               event.preventDefault();
 
@@ -526,8 +548,8 @@ export function DocPreview({
                               px: 0.6,
                               py: 0.2,
                               borderRadius: 0.6,
-                              bgcolor: "rgba(194,65,12,0.12)",
-                              color: ORANGE_CODE_COLOR,
+                              bgcolor: "rgba(15,61,74,0.1)",
+                              color: INLINE_CODE_COLOR,
                               fontSize: "0.88em"
                             }}
                           >
@@ -539,7 +561,7 @@ export function DocPreview({
                       return (
                         <SyntaxHighlighter
                           language={language}
-                          style={orangeSyntaxTheme}
+                          style={codeSyntaxTheme}
                           showLineNumbers
                           wrapLines
                           lineProps={(lineNumber) => ({
@@ -562,7 +584,7 @@ export function DocPreview({
                             borderRadius: "10px",
                             fontSize: "13px",
                             lineHeight: 1.65,
-                            background: "#F8FAFC"
+                            background: "#F7FBFE"
                           }}
                           codeTagProps={{
                             style: {
@@ -583,7 +605,7 @@ export function DocPreview({
               })()}
               <Box
                 sx={{
-                  width: { xs: "100%", lg: 260 },
+                  width: { xs: "100%", lg: 272 },
                   flexShrink: 0,
                   position: { xs: "static", lg: "sticky" },
                   top: { lg: 84 },

@@ -1,5 +1,6 @@
 :root {
-  --bg-gradient: radial-gradient(circle at 8% 5%, #d9f2fb 0%, #f4f8fb 30%, #eef5ff 70%, #f8fafc 100%);
+  --bg-gradient: radial-gradient(circle at 7% 4%, #dceef8 0%, #f3f7fb 32%, #eef4fa 68%, #f8fbfe 100%);
+  --grid-mask: linear-gradient(180deg, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0) 56%);
 }
 
 html,
@@ -13,11 +14,26 @@ body {
 body {
   font-family: var(--font-ibm-plex-sans), sans-serif;
   color: #0f172a;
+  text-rendering: optimizeLegibility;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image: var(--grid-mask);
+  z-index: -1;
 }
 
 a {
   color: inherit;
   text-decoration: none;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.35) transparent;
 }
 
 code,
