@@ -283,6 +283,7 @@ export function DocPreview({
   onNavigatePath: (path: string) => void;
   onLoaded?: (path: string) => void;
 }): React.JSX.Element {
+  const previewCacheRef = React.useRef<Map<string, FilePreviewPayload>>(new Map());
   const [data, setData] = React.useState<FilePreviewPayload | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -303,9 +304,34 @@ export function DocPreview({
     return extractMarkdownHeadings(markdownContent);
   }, [markdownContent]);
 
+  const writePreviewCache = React.useCallback((cacheKey: string, payload: FilePreviewPayload) => {
+    const current = previewCacheRef.current;
+    if (current.has(cacheKey)) {
+      current.delete(cacheKey);
+    }
+    current.set(cacheKey, payload);
+
+    // Keep recent previews to speed up frequent back-and-forth reads.
+    if (current.size > 80) {
+      const oldestKey = current.keys().next().value;
+      if (typeof oldestKey === "string") {
+        current.delete(oldestKey);
+      }
+    }
+  }, []);
+
   React.useEffect(() => {
     if (!path) {
       setData(null);
+      return;
+    }
+
+    const cached = previewCacheRef.current.get(path);
+    if (cached) {
+      setData(cached);
+      setError("");
+      setLoading(false);
+      onLoaded?.(cached.path);
       return;
     }
 
@@ -326,6 +352,7 @@ export function DocPreview({
         }
 
         setData(payload);
+        writePreviewCache(path, payload);
         onLoaded?.(payload.path);
       } catch (loadError) {
         if (loadError instanceof DOMException && loadError.name === "AbortError") {
@@ -343,7 +370,7 @@ export function DocPreview({
     return () => {
       controller.abort();
     };
-  }, [onLoaded, path]);
+  }, [onLoaded, path, writePreviewCache]);
 
   React.useEffect(() => {
     if (!data || data.kind !== "markdown") {

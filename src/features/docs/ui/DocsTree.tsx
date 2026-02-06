@@ -10,13 +10,21 @@ import { Alert, Box, IconButton, List, ListItemButton, ListItemIcon, ListItemTex
 import type { TreeNode } from "@/features/docs/domain/types";
 
 type NodeMap = Record<string, TreeNode[]>;
+type LoadingPathSet = Set<string>;
 
 export function DocsTree({ selectedPath, onSelectFile }: { selectedPath: string; onSelectFile: (path: string) => void }): React.JSX.Element {
   const [nodeMap, setNodeMap] = React.useState<NodeMap>({});
-  const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = React.useState<Set<string>>(new Set([""]));
   const [filter, setFilter] = React.useState("");
-  const [loadingAll, setLoadingAll] = React.useState(false);
+  const [loadingPaths, setLoadingPaths] = React.useState<LoadingPathSet>(new Set());
+  const [loadingRoot, setLoadingRoot] = React.useState(false);
   const [error, setError] = React.useState("");
+  const nodeMapRef = React.useRef<NodeMap>({});
+  const inflightRef = React.useRef<Map<string, Promise<TreeNode[]>>>(new Map());
+
+  React.useEffect(() => {
+    nodeMapRef.current = nodeMap;
+  }, [nodeMap]);
 
   const fetchNodes = React.useCallback(async (path: string): Promise<TreeNode[]> => {
     const params = new URLSearchParams();
@@ -33,54 +41,139 @@ export function DocsTree({ selectedPath, onSelectFile }: { selectedPath: string;
     return payload.nodes;
   }, []);
 
-  const loadAllNodes = React.useCallback(async () => {
-    setLoadingAll(true);
-    setError("");
-
-    try {
-      const nextNodeMap: NodeMap = {};
-      const queue: string[] = [""];
-      const expandedPaths = new Set<string>();
-
-      while (queue.length > 0) {
-        const currentPath = queue.shift() ?? "";
-        const nodes = await fetchNodes(currentPath);
-        nextNodeMap[currentPath] = nodes;
-        expandedPaths.add(currentPath);
-
-        for (const node of nodes) {
-          if (node.type === "directory") {
-            queue.push(node.path);
-          }
-        }
-      }
-
-      setNodeMap(nextNodeMap);
-      setExpanded(expandedPaths);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "加载目录失败");
-    } finally {
-      setLoadingAll(false);
+  const ensureNodesLoaded = React.useCallback(async (path: string): Promise<TreeNode[]> => {
+    const cached = nodeMapRef.current[path];
+    if (cached) {
+      return cached;
     }
+
+    const inflight = inflightRef.current.get(path);
+    if (inflight) {
+      return inflight;
+    }
+
+    setLoadingPaths((prev) => {
+      const next = new Set(prev);
+      next.add(path);
+      return next;
+    });
+
+    const request = fetchNodes(path)
+      .then((nodes) => {
+        setNodeMap((prev) => {
+          if (prev[path]) {
+            return prev;
+          }
+          return {
+            ...prev,
+            [path]: nodes
+          };
+        });
+        return nodes;
+      })
+      .finally(() => {
+        inflightRef.current.delete(path);
+        setLoadingPaths((prev) => {
+          const next = new Set(prev);
+          next.delete(path);
+          return next;
+        });
+      });
+
+    inflightRef.current.set(path, request);
+    return request;
   }, [fetchNodes]);
 
   React.useEffect(() => {
-    void loadAllNodes();
-  }, [loadAllNodes]);
+    let cancelled = false;
+    setLoadingRoot(true);
+    setError("");
 
-  const toggleDirectory = React.useCallback(
-    (path: string) => {
+    void ensureNodesLoaded("")
+      .catch((loadError) => {
+        if (cancelled) {
+          return;
+        }
+        setError(loadError instanceof Error ? loadError.message : "加载目录失败");
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingRoot(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ensureNodesLoaded]);
+
+  React.useEffect(() => {
+    if (!selectedPath) {
+      return;
+    }
+
+    const parts = selectedPath.split("/").filter(Boolean);
+    if (parts.length < 2) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const expandPathChain = async () => {
+      const ancestors: string[] = [];
+      for (let index = 0; index < parts.length - 1; index += 1) {
+        const ancestor = parts.slice(0, index + 1).join("/");
+        ancestors.push(ancestor);
+        await ensureNodesLoaded(ancestor);
+      }
+
+      if (cancelled) {
+        return;
+      }
+
       setExpanded((prev) => {
         const next = new Set(prev);
-        if (next.has(path)) {
-          next.delete(path);
-        } else {
-          next.add(path);
+        next.add("");
+        for (const ancestor of ancestors) {
+          next.add(ancestor);
         }
         return next;
       });
+    };
+
+    void expandPathChain().catch((loadError) => {
+      if (!cancelled) {
+        setError(loadError instanceof Error ? loadError.message : "加载目录失败");
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ensureNodesLoaded, selectedPath]);
+
+  const toggleDirectory = React.useCallback(
+    (path: string, shouldExpand: boolean) => {
+      setExpanded((prev) => {
+        const next = new Set(prev);
+        if (shouldExpand) {
+          next.add(path);
+        } else {
+          next.delete(path);
+        }
+        return next;
+      });
+
+      if (!shouldExpand) {
+        return;
+      }
+
+      setError("");
+      void ensureNodesLoaded(path).catch((loadError) => {
+        setError(loadError instanceof Error ? loadError.message : "加载目录失败");
+      });
     },
-    []
+    [ensureNodesLoaded]
   );
 
   const renderNodes = React.useCallback(
@@ -91,6 +184,9 @@ export function DocsTree({ selectedPath, onSelectFile }: { selectedPath: string;
           const isDirectory = node.type === "directory";
           const isExpanded = expanded.has(node.path);
           const children = nodeMap[node.path] ?? [];
+          const isLoadingChildren = loadingPaths.has(node.path);
+          const canExpand = isDirectory && (node.hasChildren ?? true);
+          const hasLoadedChildren = children.length > 0;
 
           return (
             <React.Fragment key={node.path}>
@@ -122,7 +218,11 @@ export function DocsTree({ selectedPath, onSelectFile }: { selectedPath: string;
                 }}
                 onClick={() => {
                   if (isDirectory) {
-                    toggleDirectory(node.path);
+                    if (!canExpand) {
+                      return;
+                    }
+
+                    toggleDirectory(node.path, !isExpanded);
                     return;
                   }
 
@@ -149,20 +249,38 @@ export function DocsTree({ selectedPath, onSelectFile }: { selectedPath: string;
                     edge="end"
                     size="small"
                     aria-label={isExpanded ? "collapse" : "expand"}
+                    disabled={!canExpand}
                     sx={{
                       ml: 0.25
                     }}
                     onClick={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
-                      toggleDirectory(node.path);
+                      if (!canExpand) {
+                        return;
+                      }
+
+                      toggleDirectory(node.path, !isExpanded);
                     }}
                   >
                     {isExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
                   </IconButton>
                 ) : null}
               </ListItemButton>
-              {isDirectory && isExpanded ? (
+              {isDirectory && isExpanded && isLoadingChildren ? (
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{
+                    display: "block",
+                    pl: 1.15 + (level + 1) * 1.6,
+                    mb: 0.35
+                  }}
+                >
+                  正在加载子目录...
+                </Typography>
+              ) : null}
+              {isDirectory && isExpanded && hasLoadedChildren ? (
                 <List key={`${node.path}:children`} disablePadding>
                   {renderNodes(children, level + 1)}
                 </List>
@@ -171,7 +289,7 @@ export function DocsTree({ selectedPath, onSelectFile }: { selectedPath: string;
           );
         });
     },
-    [expanded, filter, nodeMap, onSelectFile, selectedPath, toggleDirectory]
+    [expanded, filter, loadingPaths, nodeMap, onSelectFile, selectedPath, toggleDirectory]
   );
 
   return (
@@ -192,9 +310,9 @@ export function DocsTree({ selectedPath, onSelectFile }: { selectedPath: string;
           {error}
         </Alert>
       ) : null}
-      {loadingAll ? (
+      {loadingRoot ? (
         <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
-          正在同步目录索引...
+          正在加载目录...
         </Typography>
       ) : null}
 
