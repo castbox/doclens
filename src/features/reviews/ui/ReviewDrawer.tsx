@@ -247,14 +247,12 @@ export function ReviewDrawer({
                     }
                     secondary={
                       <>
-                        <Stack direction="row" justifyContent="space-between" alignItems="center">
-                          <Typography variant="caption" color="text.secondary">
-                            类别：{item.category}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            创建：{formatDateTime(item.createdAt)}
-                          </Typography>
-                        </Stack>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                          类别：{item.category}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                          创建：{formatDateTime(item.createdAt)}
+                        </Typography>
                       </>
                     }
                   />
