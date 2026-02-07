@@ -247,10 +247,7 @@ export function ReviewDrawer({
                     }
                     secondary={
                       <>
-                        <Typography variant="caption" color="text.secondary" className="mono">
-                          {item.path}
-                        </Typography>
-                        <Stack direction="row" justifyContent="space-between" alignItems="center" mt={0.75}>
+                        <Stack direction="row" justifyContent="space-between" alignItems="center">
                           <Typography variant="caption" color="text.secondary">
                             类别：{item.category}
                           </Typography>
