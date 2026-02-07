@@ -46,49 +46,73 @@ export function ReviewDrawer({
 }): React.JSX.Element {
   const theme = useTheme();
   const isLgUp = useMediaQuery(theme.breakpoints.up("lg"));
-  const [files, setFiles] = React.useState<PrFileRecord[]>([]);
+  const [allFiles, setAllFiles] = React.useState<PrFileRecord[]>([]);
   const [categories, setCategories] = React.useState<string[]>([]);
   const [categoryFilter, setCategoryFilter] = React.useState("");
   const [readFilter, setReadFilter] = React.useState<PrFileReadFilter>("all");
-  const [loading, setLoading] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
+  const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState("");
+  const hasLoadedOnceRef = React.useRef(false);
 
-  const loadFiles = React.useCallback(async () => {
-    setLoading(true);
-    setError("");
+  const loadFiles = React.useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent ?? false;
+    if (silent) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+      setError("");
+    }
 
     try {
-      const params = new URLSearchParams();
-      if (categoryFilter) {
-        params.set("category", categoryFilter);
-      }
-      params.set("read", readFilter);
-
-      const response = await fetch(`/api/reviews/pr-files?${params.toString()}`);
+      const response = await fetch("/api/reviews/pr-files");
       const payload = (await response.json()) as PrFilesPayload;
       if (!response.ok || !payload.files || !payload.categories) {
         throw new Error(payload.error ?? "加载 PR 文件失败");
       }
 
-      setFiles(payload.files);
+      setAllFiles(payload.files);
       setCategories(payload.categories);
+      hasLoadedOnceRef.current = true;
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "加载 PR 文件失败");
     } finally {
-      setLoading(false);
+      if (silent) {
+        setRefreshing(false);
+      } else {
+        setLoading(false);
+      }
     }
-  }, [categoryFilter, readFilter]);
+  }, []);
 
   React.useEffect(() => {
-    void loadFiles();
+    void loadFiles({ silent: hasLoadedOnceRef.current });
   }, [loadFiles, refreshToken]);
+
+  const files = React.useMemo(() => {
+    return allFiles.filter((item) => {
+      if (categoryFilter && item.category !== categoryFilter) {
+        return false;
+      }
+
+      if (readFilter === "read") {
+        return item.isRead;
+      }
+
+      if (readFilter === "unread") {
+        return !item.isRead;
+      }
+
+      return true;
+    });
+  }, [allFiles, categoryFilter, readFilter]);
 
   React.useEffect(() => {
     if (!selectedPath.startsWith("pr/")) {
       return;
     }
 
-    setFiles((prev) =>
+    setAllFiles((prev) =>
       prev.map((item) =>
         item.path === selectedPath
           ? {
@@ -172,6 +196,11 @@ export function ReviewDrawer({
         </Box>
 
         <Box sx={{ flex: 1, overflowY: "auto", pr: 0.35, minHeight: 0 }}>
+          {refreshing ? (
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.75 }}>
+              正在后台刷新...
+            </Typography>
+          ) : null}
           {loading ? <LoadingState label="加载 PR 文件..." /> : null}
           {error ? <Alert severity="error">{error}</Alert> : null}
 
