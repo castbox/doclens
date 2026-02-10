@@ -157,7 +157,7 @@ export function DocPreview({
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
   const [copyFeedback, setCopyFeedback] = React.useState<{ severity: "success" | "error"; message: string } | null>(null);
-  const [outlineCollapsed, setOutlineCollapsed] = React.useState(false);
+  const [outlineCollapsed, setOutlineCollapsed] = React.useState(true);
   const markdownContent = React.useMemo(() => {
     if (!data || data.kind !== "markdown") {
       return "";
