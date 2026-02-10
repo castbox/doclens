@@ -6,26 +6,47 @@ import { Box, Collapse, IconButton, List, ListItemButton, ListItemText, Stack, T
 import * as React from "react";
 import type { MarkdownHeading } from "@/features/docs/domain/markdownHeading";
 
-export function DocOutline({ headings }: { headings: MarkdownHeading[] }): React.JSX.Element | null {
-  const [collapsed, setCollapsed] = React.useState(false);
+type DocOutlineProps = {
+  headings: MarkdownHeading[];
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
+};
+
+export function DocOutline({ headings, collapsed: collapsedProp, onToggleCollapsed }: DocOutlineProps): React.JSX.Element | null {
+  const [internalCollapsed, setInternalCollapsed] = React.useState(false);
+  const collapsed = collapsedProp ?? internalCollapsed;
 
   if (headings.length === 0) {
     return null;
   }
 
+  const toggleCollapsed = () => {
+    if (onToggleCollapsed) {
+      onToggleCollapsed();
+      return;
+    }
+
+    setInternalCollapsed((prev) => !prev);
+  };
+
   return (
     <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1.5, px: 0.8, py: 0.8 }}>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 1, py: 0.2 }}>
-        <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontWeight: 600 }}>
-          文档大纲
-        </Typography>
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent={collapsed ? "center" : "space-between"}
+        sx={{ px: collapsed ? 0 : 1, py: 0.2 }}
+      >
+        {!collapsed ? (
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontWeight: 600 }}>
+            文档大纲
+          </Typography>
+        ) : null}
         <Tooltip title={collapsed ? "展开大纲" : "收起大纲"}>
           <IconButton
             size="small"
             aria-label={collapsed ? "展开文档大纲" : "收起文档大纲"}
-            onClick={() => {
-              setCollapsed((prev) => !prev);
-            }}
+            onClick={toggleCollapsed}
           >
             {collapsed ? <ExpandMoreIcon fontSize="small" /> : <ExpandLessIcon fontSize="small" />}
           </IconButton>

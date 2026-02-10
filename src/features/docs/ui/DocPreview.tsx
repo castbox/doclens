@@ -155,6 +155,7 @@ export function DocPreview({
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
   const [copyFeedback, setCopyFeedback] = React.useState<{ severity: "success" | "error"; message: string } | null>(null);
+  const [outlineCollapsed, setOutlineCollapsed] = React.useState(false);
   const markdownContent = React.useMemo(() => {
     if (!data || data.kind !== "markdown") {
       return "";
@@ -614,16 +615,23 @@ export function DocPreview({
               {markdownHeadings.length > 0 ? (
                 <Box
                   sx={{
-                    width: { xs: "100%", md: "clamp(220px, 24vw, 320px)" },
+                    width: { xs: "100%", md: outlineCollapsed ? 52 : "clamp(220px, 24vw, 320px)" },
                     flexShrink: 0,
                     position: { xs: "static", md: "sticky" },
                     top: { md: 76 },
                     alignSelf: { md: "flex-start" },
                     zIndex: 2,
-                    height: "fit-content"
+                    height: "fit-content",
+                    transition: "width 160ms ease"
                   }}
                 >
-                  <DocOutline headings={markdownHeadings} />
+                  <DocOutline
+                    headings={markdownHeadings}
+                    collapsed={outlineCollapsed}
+                    onToggleCollapsed={() => {
+                      setOutlineCollapsed((prev) => !prev);
+                    }}
+                  />
                 </Box>
               ) : null}
             </Stack>
