@@ -28,10 +28,12 @@ import {
   resolveMarkdownDocPath
 } from "@/features/docs/domain/markdownPreviewTransform";
 import { markdownSanitizeSchema } from "@/features/docs/domain/markdownSanitize";
+import { isMermaidLanguage, normalizeCodeBlockSource } from "@/features/docs/domain/mermaid";
 import type { FilePreviewPayload } from "@/features/docs/domain/types";
 import { extractMarkdownHeadings } from "@/features/docs/domain/markdownHeading";
 import { DocBreadcrumb } from "@/features/docs/ui/DocBreadcrumb";
 import { DocOutline } from "@/features/docs/ui/DocOutline";
+import { MermaidCodeBlock } from "@/features/docs/ui/MermaidCodeBlock";
 import { EmptyState, LoadingState } from "@/shared/ui/StateCard";
 
 type PreviewLocation = {
@@ -527,9 +529,14 @@ export function DocPreview({
                     },
                     code({ className, children }) {
                       const rawValue = String(children ?? "");
-                      const value = rawValue.replace(/\n$/, "");
+                      const value = normalizeCodeBlockSource(rawValue);
                       const language = languageFromCodeClassName(className);
                       const inline = !className && !rawValue.includes("\n");
+                      const mermaid = isMermaidLanguage(className);
+
+                      if (mermaid) {
+                        return <MermaidCodeBlock code={value} syntaxTheme={codeSyntaxTheme} />;
+                      }
 
                       if (inline) {
                         return (
