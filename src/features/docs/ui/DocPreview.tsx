@@ -3,6 +3,8 @@
 import * as React from "react";
 import ArticleOutlinedIcon from "@mui/icons-material/ArticleOutlined";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import KeyboardDoubleArrowLeftIcon from "@mui/icons-material/KeyboardDoubleArrowLeft";
+import KeyboardDoubleArrowRightIcon from "@mui/icons-material/KeyboardDoubleArrowRight";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import {
   Alert,
@@ -368,6 +370,20 @@ export function DocPreview({
                 <OpenInNewIcon fontSize="small" />
               </IconButton>
             </Tooltip>
+            {data?.kind === "markdown" && markdownHeadings.length > 0 ? (
+              <Tooltip title={outlineCollapsed ? "展开大纲" : "收起大纲"}>
+                <IconButton
+                  size="small"
+                  aria-label={outlineCollapsed ? "展开文档大纲" : "收起文档大纲"}
+                  sx={{ border: "1px solid", borderColor: "divider", bgcolor: "background.paper" }}
+                  onClick={() => {
+                    setOutlineCollapsed((prev) => !prev);
+                  }}
+                >
+                  {outlineCollapsed ? <KeyboardDoubleArrowLeftIcon fontSize="small" /> : <KeyboardDoubleArrowRightIcon fontSize="small" />}
+                </IconButton>
+              </Tooltip>
+            ) : null}
           </Stack>
         </Stack>
       </Box>
@@ -612,26 +628,19 @@ export function DocPreview({
               </Paper>
                 );
               })()}
-              {markdownHeadings.length > 0 ? (
+              {markdownHeadings.length > 0 && !outlineCollapsed ? (
                 <Box
                   sx={{
-                    width: { xs: "100%", md: outlineCollapsed ? 52 : "clamp(220px, 24vw, 320px)" },
+                    width: { xs: "100%", md: "clamp(220px, 24vw, 320px)" },
                     flexShrink: 0,
                     position: { xs: "static", md: "sticky" },
                     top: { md: 76 },
                     alignSelf: { md: "flex-start" },
                     zIndex: 2,
-                    height: "fit-content",
-                    transition: "width 160ms ease"
+                    height: "fit-content"
                   }}
                 >
-                  <DocOutline
-                    headings={markdownHeadings}
-                    collapsed={outlineCollapsed}
-                    onToggleCollapsed={() => {
-                      setOutlineCollapsed((prev) => !prev);
-                    }}
-                  />
+                  <DocOutline headings={markdownHeadings} />
                 </Box>
               ) : null}
             </Stack>
