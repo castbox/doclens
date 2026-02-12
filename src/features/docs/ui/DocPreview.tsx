@@ -286,6 +286,27 @@ export function DocPreview({
     }
   }, [data, location?.heading, location?.line, markdownHeadings]);
 
+  const handleInternalDocLinkClick = React.useCallback(
+    (event: React.MouseEvent<HTMLAnchorElement>, targetPath: string, anchorHash: string) => {
+      event.preventDefault();
+
+      if (targetPath === path) {
+        if (anchorHash) {
+          window.location.hash = anchorHash;
+        }
+        return;
+      }
+
+      onNavigatePath(targetPath);
+      if (anchorHash) {
+        window.setTimeout(() => {
+          window.location.hash = anchorHash;
+        }, 0);
+      }
+    },
+    [onNavigatePath, path]
+  );
+
   if (!path) {
     return <EmptyState title="请选择文件" description="从左侧目录树选择一个文档开始预览" />;
   }
@@ -515,21 +536,7 @@ export function DocPreview({
                             href={`/docs?path=${encodeURIComponent(targetPath)}${targetHash}`}
                             style={{ color: "var(--mui-palette-secondary-main)", textDecoration: "underline", cursor: "pointer" }}
                             onClick={(event) => {
-                              event.preventDefault();
-
-                              if (targetPath === path) {
-                                if (anchorHash) {
-                                  window.location.hash = anchorHash;
-                                }
-                                return;
-                              }
-
-                              onNavigatePath(targetPath);
-                              if (anchorHash) {
-                                window.setTimeout(() => {
-                                  window.location.hash = anchorHash;
-                                }, 0);
-                              }
+                              handleInternalDocLinkClick(event, targetPath, anchorHash);
                             }}
                             {...props}
                           >
@@ -550,9 +557,47 @@ export function DocPreview({
                       const language = languageFromCodeClassName(className);
                       const inline = !className && !rawValue.includes("\n");
                       const mermaid = isMermaidLanguage(className);
+                      const inlineDocsPath = value.trim();
+                      const inlineTargetPath =
+                        inline && inlineDocsPath.startsWith("docs/") ? resolveMarkdownDocPath(inlineDocsPath, path) : null;
 
                       if (mermaid) {
                         return <MermaidCodeBlock code={value} syntaxTheme={codeSyntaxTheme} />;
+                      }
+
+                      if (inline && inlineTargetPath) {
+                        const anchorHash = buildAnchorHash(inlineDocsPath);
+                        const targetHash = anchorHash ? `#${anchorHash}` : "";
+
+                        return (
+                          <a
+                            href={`/docs?path=${encodeURIComponent(inlineTargetPath)}${targetHash}`}
+                            style={{ textDecoration: "none" }}
+                            onClick={(event) => {
+                              handleInternalDocLinkClick(event, inlineTargetPath, anchorHash);
+                            }}
+                          >
+                            <Box
+                              component="code"
+                              sx={{
+                                px: "5px",
+                                py: "3px",
+                                mx: "2px",
+                                borderRadius: "2px",
+                                bgcolor: INLINE_CODE_BG,
+                                color: "var(--mui-palette-secondary-main)",
+                                textDecoration: "underline",
+                                fontSize: "0.88em",
+                                whiteSpace: "pre-wrap",
+                                overflowWrap: "anywhere",
+                                wordBreak: "break-word",
+                                cursor: "pointer"
+                              }}
+                            >
+                              {value}
+                            </Box>
+                          </a>
+                        );
                       }
 
                       if (inline) {
