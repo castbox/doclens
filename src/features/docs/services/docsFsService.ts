@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import { createReadStream } from "node:fs";
 import path from "node:path";
 import { detectPreviewKind } from "@/features/docs/domain/fileType";
-import type { FilePreviewPayload, TreeNode } from "@/features/docs/domain/types";
+import type { FilePreviewPayload, PathMetaPayload, TreeNode } from "@/features/docs/domain/types";
 import { resolveDocsPath } from "@/features/docs/domain/pathRules";
 import { getConfig } from "@/shared/utils/env";
 
@@ -191,6 +191,31 @@ export async function readFileMeta(inputPath: string): Promise<{ path: string; s
 
   return {
     path: relativePath,
+    size: stats.size,
+    modifiedAt: stats.mtime.toISOString(),
+    kind: detectPreviewKind(path.basename(absolutePath))
+  };
+}
+
+export async function readPathMeta(inputPath: string): Promise<PathMetaPayload> {
+  const { absolutePath, relativePath } = resolveDocsPath(inputPath);
+  const stats = await fs.stat(absolutePath);
+
+  if (stats.isDirectory()) {
+    return {
+      path: relativePath,
+      nodeType: "directory",
+      modifiedAt: stats.mtime.toISOString()
+    };
+  }
+
+  if (!stats.isFile()) {
+    throw new Error("Path is not a file or directory");
+  }
+
+  return {
+    path: relativePath,
+    nodeType: "file",
     size: stats.size,
     modifiedAt: stats.mtime.toISOString(),
     kind: detectPreviewKind(path.basename(absolutePath))

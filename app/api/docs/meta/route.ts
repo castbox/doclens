@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripPathAnchor } from "@/features/docs/domain/anchor";
 import { PathSecurityError } from "@/features/docs/domain/pathRules";
-import { readFileMeta } from "@/features/docs/services/docsFsService";
+import { readPathMeta } from "@/features/docs/services/docsFsService";
 import { badRequest, serverError } from "@/shared/utils/http";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -15,7 +15,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       return badRequest("path is required");
     }
 
-    const payload = await readFileMeta(safePathParam);
+    const payload = await readPathMeta(safePathParam);
     return NextResponse.json(payload);
   } catch (error) {
     if (error instanceof PathSecurityError || error instanceof Error) {

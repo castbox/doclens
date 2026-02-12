@@ -17,3 +17,17 @@ export type FilePreviewPayload = {
   truncatedLines: number;
   content: string;
 };
+
+export type PathMetaPayload =
+  | {
+      path: string;
+      nodeType: "file";
+      size: number;
+      modifiedAt: string;
+      kind: PreviewKind;
+    }
+  | {
+      path: string;
+      nodeType: "directory";
+      modifiedAt: string;
+    };

@@ -7,14 +7,24 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import FolderOpenOutlinedIcon from "@mui/icons-material/FolderOpenOutlined";
 import FolderOutlinedIcon from "@mui/icons-material/FolderOutlined";
 import { Alert, Box, IconButton, List, ListItemButton, ListItemIcon, ListItemText, TextField, Typography } from "@mui/material";
+import { isPathWithinScope } from "@/features/docs/domain/urlState";
 import type { TreeNode } from "@/features/docs/domain/types";
 
 type NodeMap = Record<string, TreeNode[]>;
 type LoadingPathSet = Set<string>;
 
-export function DocsTree({ selectedPath, onSelectFile }: { selectedPath: string; onSelectFile: (path: string) => void }): React.JSX.Element {
+export function DocsTree({
+  selectedPath,
+  scopePath = "",
+  onSelectFile
+}: {
+  selectedPath: string;
+  scopePath?: string;
+  onSelectFile: (path: string) => void;
+}): React.JSX.Element {
+  const normalizedScopePath = React.useMemo(() => scopePath.split("/").filter(Boolean).join("/"), [scopePath]);
   const [nodeMap, setNodeMap] = React.useState<NodeMap>({});
-  const [expanded, setExpanded] = React.useState<Set<string>>(new Set([""]));
+  const [expanded, setExpanded] = React.useState<Set<string>>(new Set([normalizedScopePath]));
   const [filter, setFilter] = React.useState("");
   const [loadingPaths, setLoadingPaths] = React.useState<LoadingPathSet>(new Set());
   const [loadingRoot, setLoadingRoot] = React.useState(false);
@@ -86,10 +96,15 @@ export function DocsTree({ selectedPath, onSelectFile }: { selectedPath: string;
 
   React.useEffect(() => {
     let cancelled = false;
+    inflightRef.current.clear();
+    nodeMapRef.current = {};
+    setNodeMap({});
+    setExpanded(new Set([normalizedScopePath]));
+    setLoadingPaths(new Set());
     setLoadingRoot(true);
     setError("");
 
-    void ensureNodesLoaded("")
+    void ensureNodesLoaded(normalizedScopePath)
       .catch((loadError) => {
         if (cancelled) {
           return;
@@ -105,24 +120,30 @@ export function DocsTree({ selectedPath, onSelectFile }: { selectedPath: string;
     return () => {
       cancelled = true;
     };
-  }, [ensureNodesLoaded]);
+  }, [ensureNodesLoaded, normalizedScopePath]);
 
   React.useEffect(() => {
     if (!selectedPath) {
       return;
     }
 
-    const parts = selectedPath.split("/").filter(Boolean);
-    if (parts.length < 2) {
+    if (normalizedScopePath && !isPathWithinScope(selectedPath, normalizedScopePath)) {
       return;
     }
+
+    const scopeParts = normalizedScopePath.split("/").filter(Boolean);
+    const selectedParts = selectedPath.split("/").filter(Boolean);
+    if (selectedParts.length <= scopeParts.length) {
+      return;
+    }
+    const relativeParts = selectedParts.slice(scopeParts.length);
 
     let cancelled = false;
 
     const expandPathChain = async () => {
       const ancestors: string[] = [];
-      for (let index = 0; index < parts.length - 1; index += 1) {
-        const ancestor = parts.slice(0, index + 1).join("/");
+      for (let index = 0; index < relativeParts.length - 1; index += 1) {
+        const ancestor = [...scopeParts, ...relativeParts.slice(0, index + 1)].join("/");
         ancestors.push(ancestor);
         await ensureNodesLoaded(ancestor);
       }
@@ -133,7 +154,7 @@ export function DocsTree({ selectedPath, onSelectFile }: { selectedPath: string;
 
       setExpanded((prev) => {
         const next = new Set(prev);
-        next.add("");
+        next.add(normalizedScopePath);
         for (const ancestor of ancestors) {
           next.add(ancestor);
         }
@@ -150,7 +171,7 @@ export function DocsTree({ selectedPath, onSelectFile }: { selectedPath: string;
     return () => {
       cancelled = true;
     };
-  }, [ensureNodesLoaded, selectedPath]);
+  }, [ensureNodesLoaded, normalizedScopePath, selectedPath]);
 
   const toggleDirectory = React.useCallback(
     (path: string, shouldExpand: boolean) => {
@@ -315,9 +336,14 @@ export function DocsTree({ selectedPath, onSelectFile }: { selectedPath: string;
           正在加载目录...
         </Typography>
       ) : null}
+      {normalizedScopePath ? (
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+          当前目录范围：{normalizedScopePath}
+        </Typography>
+      ) : null}
 
       <List disablePadding sx={{ pr: 0.25, overflowY: "auto", minHeight: 0, maxHeight: "calc(100dvh - 178px)" }}>
-        {renderNodes(nodeMap[""] ?? [], 0)}
+        {renderNodes(nodeMap[normalizedScopePath] ?? [], 0)}
       </List>
     </Box>
   );
