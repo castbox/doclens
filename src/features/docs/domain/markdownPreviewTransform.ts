@@ -1,4 +1,4 @@
-const DOC_MARKDOWN_PATH_PATTERN = /(?:docs\/|\/|\.\.\/|\.\/)[^\s)\]`]+?\.md(?:#[^\s)\]`]+)?/g;
+const DOC_MARKDOWN_PATH_PATTERN = /docs\/[^\s)\]`]+?\.md(?:#[^\s)\]`]+)?/g;
 
 type TextRange = {
   start: number;

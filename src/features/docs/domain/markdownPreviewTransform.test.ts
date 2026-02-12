@@ -15,6 +15,16 @@ describe("markdownPreviewTransform", () => {
     expect(result).toContain("[docs/prd/doclens_prd.md#scope](docs/prd/doclens_prd.md#scope)");
   });
 
+  it("仅对 docs 前缀路径做自动补链", () => {
+    const input = "相对 ./a.md 上级 ../b.md 绝对 /c.md 与 docs/prd/doclens_prd.md";
+    const result = autoLinkDocsMarkdownPaths(input);
+
+    expect(result).toContain("./a.md");
+    expect(result).toContain("../b.md");
+    expect(result).toContain("/c.md");
+    expect(result).toContain("[docs/prd/doclens_prd.md](docs/prd/doclens_prd.md)");
+  });
+
   it("不会改写代码块和行内代码中的路径", () => {
     const input = [
       "`docs/prd/doclens_prd.md`",
