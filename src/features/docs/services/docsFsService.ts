@@ -6,6 +6,10 @@ import type { FilePreviewPayload, PathMetaPayload, TreeNode } from "@/features/d
 import { resolveDocsPath } from "@/features/docs/domain/pathRules";
 import { getConfig } from "@/shared/utils/env";
 
+type ReadFilePreviewOptions = {
+  fullContent?: boolean;
+};
+
 function shouldIgnoreName(name: string): boolean {
   const { searchIgnore } = getConfig();
   if (name.startsWith(".")) {
@@ -81,10 +85,11 @@ function truncateByLines(content: string, maxLines: number): { content: string; 
   };
 }
 
-export async function readFilePreview(inputPath: string): Promise<FilePreviewPayload> {
+export async function readFilePreview(inputPath: string, options: ReadFilePreviewOptions = {}): Promise<FilePreviewPayload> {
   const { absolutePath, relativePath } = resolveDocsPath(inputPath);
   const { maxPreviewBytes, maxPreviewLines } = getConfig();
   const stats = await fs.stat(absolutePath);
+  const fullContent = options.fullContent === true;
 
   if (!stats.isFile()) {
     throw new Error("Path is not a file");
@@ -109,9 +114,22 @@ export async function readFilePreview(inputPath: string): Promise<FilePreviewPay
 
   let rawContent: string;
 
+  rawContent = await fs.readFile(absolutePath, { encoding: "utf8" });
+  if (fullContent) {
+    return {
+      path: relativePath,
+      name,
+      kind,
+      size,
+      modifiedAt: stats.mtime.toISOString(),
+      truncated: false,
+      truncatedLines: 0,
+      content: rawContent
+    };
+  }
+
   if (size > maxPreviewBytes) {
-    const fileContent = await fs.readFile(absolutePath, { encoding: "utf8" });
-    const truncated = truncateByLines(fileContent, maxPreviewLines);
+    const truncated = truncateByLines(rawContent, maxPreviewLines);
     return {
       path: relativePath,
       name,
@@ -124,7 +142,6 @@ export async function readFilePreview(inputPath: string): Promise<FilePreviewPay
     };
   }
 
-  rawContent = await fs.readFile(absolutePath, { encoding: "utf8" });
   const lineTruncated = truncateByLines(rawContent, maxPreviewLines);
 
   return {

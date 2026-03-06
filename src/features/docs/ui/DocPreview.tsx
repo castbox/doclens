@@ -158,6 +158,12 @@ export function DocPreview({
   const [error, setError] = React.useState("");
   const [copyFeedback, setCopyFeedback] = React.useState<{ severity: "success" | "error"; message: string } | null>(null);
   const [outlineCollapsed, setOutlineCollapsed] = React.useState(true);
+  const [fullContentPath, setFullContentPath] = React.useState<string | null>(null);
+  const fullContentRequested = fullContentPath === path;
+  const previewCacheKey = fullContentRequested ? `${path}::full` : `${path}::preview`;
+  const previewRequestUrl = fullContentRequested
+    ? `/api/docs/file?path=${encodeURIComponent(path)}&full=1`
+    : `/api/docs/file?path=${encodeURIComponent(path)}`;
   const markdownContent = React.useMemo(() => {
     if (!data || data.kind !== "markdown") {
       return "";
@@ -196,7 +202,7 @@ export function DocPreview({
       return;
     }
 
-    const cached = previewCacheRef.current.get(path);
+    const cached = previewCacheRef.current.get(previewCacheKey);
     if (cached) {
       setData(cached);
       setError("");
@@ -212,7 +218,7 @@ export function DocPreview({
       setError("");
 
       try {
-        const response = await fetch(`/api/docs/file?path=${encodeURIComponent(path)}`, {
+        const response = await fetch(previewRequestUrl, {
           signal: controller.signal
         });
 
@@ -222,7 +228,7 @@ export function DocPreview({
         }
 
         setData(payload);
-        writePreviewCache(path, payload);
+        writePreviewCache(previewCacheKey, payload);
         onLoaded?.(payload.path);
       } catch (loadError) {
         if (loadError instanceof DOMException && loadError.name === "AbortError") {
@@ -240,7 +246,7 @@ export function DocPreview({
     return () => {
       controller.abort();
     };
-  }, [onLoaded, path, writePreviewCache]);
+  }, [onLoaded, path, previewCacheKey, previewRequestUrl, writePreviewCache]);
 
   React.useEffect(() => {
     if (!data || data.kind !== "markdown") {
@@ -417,7 +423,28 @@ export function DocPreview({
       {!loading && !error && data ? (
         <>
           {data.truncated ? (
-            <Alert severity="warning">文件过大，已按策略截断预览，省略 {data.truncatedLines} 行。</Alert>
+            <Alert
+              severity="warning"
+              action={
+                fullContentRequested ? (
+                  <Button color="inherit" size="small" disabled>
+                    完整页面数据加载中
+                  </Button>
+                ) : (
+                  <Button
+                    color="inherit"
+                    size="small"
+                    onClick={() => {
+                      setFullContentPath(path);
+                    }}
+                  >
+                    显示完整页面数据
+                  </Button>
+                )
+              }
+            >
+              文件过大，已按策略截断预览，省略 {data.truncatedLines} 行。
+            </Alert>
           ) : null}
 
           {data.kind === "markdown" ? (

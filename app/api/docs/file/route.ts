@@ -26,7 +26,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       });
     }
 
-    const payload = await readFilePreview(safePathParam);
+    const full = request.nextUrl.searchParams.get("full") === "1";
+    const payload = await readFilePreview(safePathParam, { fullContent: full });
     return NextResponse.json(payload);
   } catch (error) {
     if (error instanceof PathSecurityError || error instanceof Error) {
