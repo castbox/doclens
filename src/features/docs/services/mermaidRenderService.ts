@@ -6,6 +6,17 @@ let mermaidModulePromise: Promise<typeof import("mermaid").default> | null = nul
 let environmentReady = false;
 let renderQueue = Promise.resolve();
 
+const mermaidExportConfig = {
+  startOnLoad: false,
+  securityLevel: "strict",
+  suppressErrorRendering: true,
+  htmlLabels: false,
+  markdownAutoWrap: false,
+  flowchart: {
+    htmlLabels: false
+  }
+} as const;
+
 type SvgBBox = {
   x: number;
   y: number;
@@ -117,11 +128,7 @@ async function loadMermaid() {
   if (!mermaidModulePromise) {
     mermaidModulePromise = import("mermaid").then((module) => {
       const mermaid = module.default;
-      mermaid.initialize({
-        startOnLoad: false,
-        securityLevel: "strict",
-        suppressErrorRendering: true
-      });
+      mermaid.initialize(mermaidExportConfig);
       return mermaid;
     });
   }
@@ -134,11 +141,11 @@ function randomId(prefix: string): string {
 }
 
 function normalizeMermaidSvg(svg: string): string {
-  // Mermaid 在 foreignObject XHTML 里会输出 `<br>`；对浏览器没问题，但 `sharp/libvips` 按 XML 解析时要求自闭合。
+  // 理想情况下静态导出配置不会再产出 foreignObject；这里仍保留 `<br>` 归一化，兼容其他图类型的边缘情况。
   return svg.replace(/<br\s*>/g, "<br/>");
 }
 
-export async function renderMermaidPngDataUrl(code: string): Promise<string> {
+export async function renderMermaidSvgForExport(code: string): Promise<string> {
   const trimmedCode = code.trim();
   if (!trimmedCode) {
     throw new Error("Mermaid 图表内容为空");
@@ -147,9 +154,7 @@ export async function renderMermaidPngDataUrl(code: string): Promise<string> {
   const task = renderQueue.then(async () => {
     const mermaid = await loadMermaid();
     const { svg } = await mermaid.render(randomId("doclens-export-mermaid"), trimmedCode);
-    const normalizedSvg = normalizeMermaidSvg(svg);
-    const pngBuffer = await sharp(Buffer.from(normalizedSvg)).png().toBuffer();
-    return `data:image/png;base64,${pngBuffer.toString("base64")}`;
+    return normalizeMermaidSvg(svg);
   });
 
   renderQueue = task.then(
@@ -158,4 +163,10 @@ export async function renderMermaidPngDataUrl(code: string): Promise<string> {
   );
 
   return task;
+}
+
+export async function renderMermaidPngDataUrl(code: string): Promise<string> {
+  const normalizedSvg = await renderMermaidSvgForExport(code);
+  const pngBuffer = await sharp(Buffer.from(normalizedSvg)).png().toBuffer();
+  return `data:image/png;base64,${pngBuffer.toString("base64")}`;
 }
