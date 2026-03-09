@@ -3,16 +3,21 @@
 import * as React from "react";
 import ArticleOutlinedIcon from "@mui/icons-material/ArticleOutlined";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import KeyboardDoubleArrowLeftIcon from "@mui/icons-material/KeyboardDoubleArrowLeft";
 import KeyboardDoubleArrowRightIcon from "@mui/icons-material/KeyboardDoubleArrowRight";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import {
   Alert,
+  CircularProgress,
   Box,
   Button,
   Chip,
   Divider,
   IconButton,
+  ListItemText,
+  Menu,
+  MenuItem,
   Paper,
   Snackbar,
   Stack,
@@ -37,6 +42,7 @@ import { DocBreadcrumb } from "@/features/docs/ui/DocBreadcrumb";
 import { DocOutline } from "@/features/docs/ui/DocOutline";
 import { MermaidCodeBlock } from "@/features/docs/ui/MermaidCodeBlock";
 import { EmptyState, LoadingState } from "@/shared/ui/StateCard";
+import type { DocExportFormat } from "@/features/docs/domain/docExport";
 
 type PreviewLocation = {
   line?: number;
@@ -63,6 +69,24 @@ function formatBytes(bytes: number): string {
   }
 
   return `${bytes} B`;
+}
+
+function getDownloadFileName(contentDisposition: string | null, fallback: string): string {
+  if (!contentDisposition) {
+    return fallback;
+  }
+
+  const utf8Match = /filename\*=UTF-8''([^;]+)/i.exec(contentDisposition);
+  if (utf8Match?.[1]) {
+    return decodeURIComponent(utf8Match[1]);
+  }
+
+  const plainMatch = /filename="?([^"]+)"?/i.exec(contentDisposition);
+  if (plainMatch?.[1]) {
+    return decodeURIComponent(plainMatch[1]);
+  }
+
+  return fallback;
 }
 
 const ORANGE_CODE_COLOR = "#E96900";
@@ -159,6 +183,8 @@ export function DocPreview({
   const [copyFeedback, setCopyFeedback] = React.useState<{ severity: "success" | "error"; message: string } | null>(null);
   const [outlineCollapsed, setOutlineCollapsed] = React.useState(true);
   const [fullContentPath, setFullContentPath] = React.useState<string | null>(null);
+  const [exportMenuAnchor, setExportMenuAnchor] = React.useState<HTMLElement | null>(null);
+  const [exportingFormat, setExportingFormat] = React.useState<DocExportFormat | null>(null);
   const fullContentRequested = fullContentPath === path;
   const previewCacheKey = fullContentRequested ? `${path}::full` : `${path}::preview`;
   const previewRequestUrl = fullContentRequested
@@ -313,6 +339,46 @@ export function DocPreview({
     [onNavigatePath, path]
   );
 
+  const handleExport = React.useCallback(
+    async (format: DocExportFormat) => {
+      setExportMenuAnchor(null);
+      setExportingFormat(format);
+
+      try {
+        const response = await fetch(`/api/docs/export?path=${encodeURIComponent(path)}&format=${format}`);
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(payload?.error ?? "导出失败");
+        }
+
+        const blob = await response.blob();
+        const fallbackFileName = `${path.split("/").pop() ?? "doclens"}-详情页.${format}`;
+        const downloadFileName = getDownloadFileName(response.headers.get("content-disposition"), fallbackFileName);
+        const objectUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = objectUrl;
+        link.download = downloadFileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(objectUrl);
+
+        setCopyFeedback({
+          severity: "success",
+          message: `已开始下载 ${format.toUpperCase()} 文档`
+        });
+      } catch (downloadError) {
+        setCopyFeedback({
+          severity: "error",
+          message: downloadError instanceof Error ? downloadError.message : "导出文档失败"
+        });
+      } finally {
+        setExportingFormat(null);
+      }
+    },
+    [path]
+  );
+
   if (!path) {
     return <EmptyState title="请选择文件" description="从左侧目录树选择一个文档开始预览" />;
   }
@@ -353,6 +419,47 @@ export function DocPreview({
                 <ContentCopyIcon fontSize="small" />
               </IconButton>
             </Tooltip>
+            <Tooltip title="保存为 Word 文档">
+              <span>
+                <IconButton
+                  size="small"
+                  aria-label="save as word document"
+                  sx={{ border: "1px solid", borderColor: "divider", bgcolor: "background.paper" }}
+                  onClick={(event) => {
+                    setExportMenuAnchor(event.currentTarget);
+                  }}
+                  disabled={Boolean(exportingFormat)}
+                >
+                  {exportingFormat ? <CircularProgress size={16} /> : <DescriptionOutlinedIcon fontSize="small" />}
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Menu
+              anchorEl={exportMenuAnchor}
+              open={Boolean(exportMenuAnchor)}
+              onClose={() => {
+                if (!exportingFormat) {
+                  setExportMenuAnchor(null);
+                }
+              }}
+            >
+              <MenuItem
+                disabled={Boolean(exportingFormat)}
+                onClick={() => {
+                  void handleExport("docx");
+                }}
+              >
+                <ListItemText primary="保存为 .docx" secondary="标准 Word 格式，长期优先推荐" />
+              </MenuItem>
+              <MenuItem
+                disabled={Boolean(exportingFormat)}
+                onClick={() => {
+                  void handleExport("doc");
+                }}
+              >
+                <ListItemText primary="保存为 .doc" secondary="兼容旧版 Word 打开方式" />
+              </MenuItem>
+            </Menu>
             {data?.kind === "markdown" ? (
               <Tooltip title="复制 Markdown 源文件">
                 <IconButton
