@@ -133,6 +133,11 @@ function randomId(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function normalizeMermaidSvg(svg: string): string {
+  // Mermaid 在 foreignObject XHTML 里会输出 `<br>`；对浏览器没问题，但 `sharp/libvips` 按 XML 解析时要求自闭合。
+  return svg.replace(/<br\s*>/g, "<br/>");
+}
+
 export async function renderMermaidPngDataUrl(code: string): Promise<string> {
   const trimmedCode = code.trim();
   if (!trimmedCode) {
@@ -142,7 +147,8 @@ export async function renderMermaidPngDataUrl(code: string): Promise<string> {
   const task = renderQueue.then(async () => {
     const mermaid = await loadMermaid();
     const { svg } = await mermaid.render(randomId("doclens-export-mermaid"), trimmedCode);
-    const pngBuffer = await sharp(Buffer.from(svg)).png().toBuffer();
+    const normalizedSvg = normalizeMermaidSvg(svg);
+    const pngBuffer = await sharp(Buffer.from(normalizedSvg)).png().toBuffer();
     return `data:image/png;base64,${pngBuffer.toString("base64")}`;
   });
 
