@@ -1,11 +1,12 @@
 import { Buffer } from "node:buffer";
 import HtmlToDocx from "@turbodocx/html-to-docx";
-import rehypeSanitize from "rehype-sanitize";
+import rehypeSanitize, { type Options as MarkdownSanitizeSchema } from "rehype-sanitize";
 import rehypeStringify from "rehype-stringify";
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 import { unified } from "unified";
+import { visit } from "unist-util-visit";
 import {
   buildDocExportFileName,
   buildDocExportHtml,
@@ -14,16 +15,104 @@ import {
   buildPreformattedContentHtml,
   type DocExportFormat
 } from "@/features/docs/domain/docExport";
+import { isMermaidLanguage, normalizeCodeBlockSource } from "@/features/docs/domain/mermaid";
 import { markdownSanitizeSchema } from "@/features/docs/domain/markdownSanitize";
 import { autoLinkDocsMarkdownPaths, preserveDiffSectionLineBreaks } from "@/features/docs/domain/markdownPreviewTransform";
 import type { FilePreviewPayload } from "@/features/docs/domain/types";
 import { readFilePreview } from "@/features/docs/services/docsFsService";
+import { renderMermaidPngDataUrl } from "@/features/docs/services/mermaidRenderService";
 
 export type DocExportResult = {
   buffer: Buffer;
   contentType: string;
   fileName: string;
 };
+
+const exportMarkdownSanitizeSchema: MarkdownSanitizeSchema = {
+  ...markdownSanitizeSchema,
+  protocols: {
+    ...markdownSanitizeSchema.protocols,
+    src: [...new Set([...(markdownSanitizeSchema.protocols?.src ?? []), "data"])]
+  }
+};
+
+function getClassNameValue(className: unknown): string {
+  if (Array.isArray(className)) {
+    return className.join(" ");
+  }
+
+  return typeof className === "string" ? className : "";
+}
+
+function getNodeTextContent(node: unknown): string {
+  if (!node || typeof node !== "object") {
+    return "";
+  }
+
+  const currentNode = node as { type?: string; value?: unknown; children?: unknown[] };
+  if (currentNode.type === "text") {
+    return typeof currentNode.value === "string" ? currentNode.value : "";
+  }
+
+  if (!Array.isArray(currentNode.children)) {
+    return "";
+  }
+
+  return currentNode.children.map((child) => getNodeTextContent(child)).join("");
+}
+
+function rehypeRenderMermaidImages() {
+  return async (tree: unknown) => {
+    const renderTasks: Promise<void>[] = [];
+
+    visit(tree as any, "element", (node: any, index: number | undefined, parent: any) => {
+      if (!parent || typeof index !== "number" || node.tagName !== "pre") {
+        return;
+      }
+
+      const codeNode = Array.isArray(node.children) ? node.children[0] : null;
+      if (!codeNode || codeNode.type !== "element" || codeNode.tagName !== "code") {
+        return;
+      }
+
+      const className = getClassNameValue(codeNode.properties?.className);
+      if (!isMermaidLanguage(className)) {
+        return;
+      }
+
+      const mermaidSource = normalizeCodeBlockSource(getNodeTextContent(codeNode));
+      renderTasks.push(
+        (async () => {
+          try {
+            const src = await renderMermaidPngDataUrl(mermaidSource);
+            parent.children[index] = {
+              type: "element",
+              tagName: "section",
+              properties: {
+                className: ["mermaid-export-block"]
+              },
+              children: [
+                {
+                  type: "element",
+                  tagName: "img",
+                  properties: {
+                    src,
+                    alt: "Mermaid 图表"
+                  },
+                  children: []
+                }
+              ]
+            };
+          } catch (error) {
+            console.warn("Mermaid export render failed:", error);
+          }
+        })()
+      );
+    });
+
+    await Promise.all(renderTasks);
+  };
+}
 
 async function renderMarkdownContentHtml(content: string): Promise<string> {
   if (!content.trim()) {
@@ -35,7 +124,8 @@ async function renderMarkdownContentHtml(content: string): Promise<string> {
     .use(remarkParse)
     .use(remarkGfm)
     .use(remarkRehype)
-    .use(rehypeSanitize, markdownSanitizeSchema)
+    .use(rehypeRenderMermaidImages)
+    .use(rehypeSanitize, exportMarkdownSanitizeSchema)
     .use(rehypeStringify)
     .process(processedMarkdown);
 

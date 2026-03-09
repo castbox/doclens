@@ -107,6 +107,13 @@ export function buildDocExportHtml(model: DocExportModel): string {
         text-decoration: underline;
       }
 
+      img {
+        display: block;
+        max-width: 100%;
+        height: auto;
+        margin: 0 auto;
+      }
+
       table {
         width: 100%;
         border-collapse: collapse;
@@ -174,6 +181,10 @@ export function buildDocExportHtml(model: DocExportModel): string {
       .doc-content p:last-child,
       .doc-content pre:last-child {
         margin-bottom: 0;
+      }
+
+      .mermaid-export-block {
+        margin: 12pt 0;
       }
     </style>
   </head>
