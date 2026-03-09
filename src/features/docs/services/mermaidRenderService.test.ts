@@ -1,3 +1,5 @@
+import { Buffer } from "node:buffer";
+import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { renderMermaidPngDataUrl, renderMermaidSvgForExport } from "./mermaidRenderService";
 
@@ -24,5 +26,34 @@ describe("renderMermaidPngDataUrl", () => {
     expect(svg.includes("foreignObject")).toBe(false);
     expect(svg.includes("<text")).toBe(true);
     expect(svg.includes("Next.js页面")).toBe(true);
+  });
+
+  it("expands svg and png size for wide diagrams instead of using a fixed viewport", async () => {
+    const code = `flowchart LR
+Start[DocLens Export]
+Start --> A[shared/api-schema]
+A --> B[docs/tools/openapi-sync-workflow.md]
+B --> C[justfile/scripts]
+C --> D[platform/api-types]
+D --> E[frontend/hooks]
+E --> F[review drawer]
+F --> G[release checklist]
+G --> H[workspace governance]
+H --> I[docx export]
+I --> J[verification]`;
+    const svg = await renderMermaidSvgForExport(code);
+    const pngDataUrl = await renderMermaidPngDataUrl(code);
+    const widthMatch = svg.match(/<svg[^>]*\swidth="([^"]+)"/i);
+    const heightMatch = svg.match(/<svg[^>]*\sheight="([^"]+)"/i);
+    const viewBoxMatch = svg.match(/viewBox="([^"]+)"/i);
+    const pngBuffer = Buffer.from(pngDataUrl.split(",")[1], "base64");
+    const pngMetadata = await sharp(pngBuffer).metadata();
+
+    expect(widthMatch?.[1]).not.toBe("100%");
+    expect(Number.parseFloat(widthMatch?.[1] ?? "0")).toBeGreaterThan(816);
+    expect(Number.parseFloat(heightMatch?.[1] ?? "0")).toBeGreaterThan(40);
+    expect(viewBoxMatch?.[1]).not.toBe("-8 -8 816 616");
+    expect((pngMetadata.width ?? 0)).toBeGreaterThan(816);
+    expect((pngMetadata.height ?? 0)).toBeGreaterThan(40);
   });
 });
