@@ -15,6 +15,7 @@ import {
   MenuItem,
   Stack,
   TextField,
+  Tooltip,
   Typography,
   useMediaQuery
 } from "@mui/material";
@@ -238,10 +239,12 @@ export function ReviewDrawer({
                   <ListItemText
                     sx={{ pl: 1.25 }}
                     primary={
-                      <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
-                        <Typography variant="body2" fontWeight={600} noWrap>
-                          {item.name}
-                        </Typography>
+                      <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1} sx={{ minWidth: 0 }}>
+                        <Tooltip title={item.name} placement="top-start" arrow>
+                          <Typography variant="body2" fontWeight={600} noWrap sx={{ flex: 1, minWidth: 0 }}>
+                            {item.name}
+                          </Typography>
+                        </Tooltip>
                         <Chip label={item.isRead ? "已读" : "未读"} size="small" color={item.isRead ? "success" : "warning"} variant="outlined" />
                       </Stack>
                     }
