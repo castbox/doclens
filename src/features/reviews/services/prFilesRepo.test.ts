@@ -8,7 +8,7 @@ import { resetDocStatesRepoForTests } from "@/features/docs/services/docStatesRe
 import { setDocStarStatus } from "@/features/docs/services/docStarsRepo";
 import { resetPrFileCreatedAtCachesForTests } from "@/features/reviews/services/prFileCreatedAt";
 import { clearConfigCache } from "@/shared/utils/env";
-import { listPrFiles, markPrFileRead, resetPrFilesRepoForTests, syncPrFilesSnapshot } from "./prFilesRepo";
+import { ensurePrFileTracked, listPrFiles, markPrFileRead, resetPrFilesRepoForTests, syncPrFilesSnapshot } from "./prFilesRepo";
 
 function runGit(cwd: string, args: string[], extraEnv?: Record<string, string>): string {
   return execFileSync("git", ["-C", cwd, ...args], {
@@ -173,5 +173,74 @@ describe("prFilesRepo 状态持久化", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]?.path).toBe(relativePath);
     expect(rows[0]?.createdAt).toBe("2024-12-25T00:00:00.000Z");
+  });
+
+  it("增量同步只补录新路径，不刷新已存在路径的快照元信息", async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "doclens-pr-incremental-sync-"));
+    const docsRoot = tempDir;
+    const dbPath = path.join(tempDir, "data", "doclens.sqlite");
+    const firstRelativePath = "pr/20260317/perf/existing.md";
+    const firstAbsolutePath = path.join(docsRoot, "pr", "20260317", "perf", "existing.md");
+    const secondRelativePath = "pr/20260317/perf/new.md";
+    const secondAbsolutePath = path.join(docsRoot, "pr", "20260317", "perf", "new.md");
+    const initialCreatedAt = "2026-01-08T09:30:00.000Z";
+    const updatedCreatedAt = "2026-02-09T10:45:00.000Z";
+
+    await fs.mkdir(path.dirname(firstAbsolutePath), { recursive: true });
+    await fs.writeFile(firstAbsolutePath, ["---", `created_at: ${initialCreatedAt}`, "---", "", "# existing"].join("\n"), "utf8");
+
+    process.env.DOCLENS_DOCS_ROOT = docsRoot;
+    process.env.DOCLENS_DB_PATH = dbPath;
+    clearConfigCache();
+    resetDbClientForTests();
+    resetDocStatesRepoForTests();
+    resetPrFilesRepoForTests();
+    resetPrFileCreatedAtCachesForTests();
+
+    await syncPrFilesSnapshot();
+
+    await fs.writeFile(firstAbsolutePath, ["---", `created_at: ${updatedCreatedAt}`, "---", "", "# existing updated"].join("\n"), "utf8");
+    await fs.writeFile(secondAbsolutePath, "# new\n", "utf8");
+
+    await syncPrFilesSnapshot();
+
+    const rows = await listPrFiles();
+    const firstRow = rows.find((row) => row.path === firstRelativePath);
+    const secondRow = rows.find((row) => row.path === secondRelativePath);
+
+    expect(rows).toHaveLength(2);
+    expect(firstRow?.createdAt).toBe(initialCreatedAt);
+    expect(secondRow?.path).toBe(secondRelativePath);
+  });
+
+  it("ensurePrFileTracked 对已存在路径保持幂等，不重复刷新快照", async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "doclens-pr-track-idempotent-"));
+    const docsRoot = tempDir;
+    const dbPath = path.join(tempDir, "data", "doclens.sqlite");
+    const relativePath = "pr/20260317/perf/track-existing.md";
+    const absolutePath = path.join(docsRoot, "pr", "20260317", "perf", "track-existing.md");
+    const initialCreatedAt = "2026-01-08T09:30:00.000Z";
+    const updatedCreatedAt = "2026-02-09T10:45:00.000Z";
+
+    await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+    await fs.writeFile(absolutePath, ["---", `created_at: ${initialCreatedAt}`, "---", "", "# tracked"].join("\n"), "utf8");
+
+    process.env.DOCLENS_DOCS_ROOT = docsRoot;
+    process.env.DOCLENS_DB_PATH = dbPath;
+    clearConfigCache();
+    resetDbClientForTests();
+    resetDocStatesRepoForTests();
+    resetPrFilesRepoForTests();
+    resetPrFileCreatedAtCachesForTests();
+
+    await syncPrFilesSnapshot();
+    await fs.writeFile(absolutePath, ["---", `created_at: ${updatedCreatedAt}`, "---", "", "# tracked updated"].join("\n"), "utf8");
+
+    await ensurePrFileTracked(relativePath);
+
+    const rows = await listPrFiles();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.path).toBe(relativePath);
+    expect(rows[0]?.createdAt).toBe(initialCreatedAt);
   });
 });

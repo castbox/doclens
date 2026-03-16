@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { and, desc, eq, like, lt, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, like, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { docStates, prReviewFiles } from "@/db/schema";
 import type { PrFileReadFilter, PrFileRecord } from "@/features/reviews/domain/types";
@@ -173,6 +173,20 @@ async function getPrFileRow(inputPath: string) {
   return row ?? null;
 }
 
+async function hasTrackedPrFile(inputPath: string): Promise<boolean> {
+  await ensurePrFilesSchema();
+  const db = getDb();
+  const [row] = await db.select({ path: prReviewFiles.path }).from(prReviewFiles).where(eq(prReviewFiles.path, inputPath)).limit(1);
+  return Boolean(row?.path);
+}
+
+async function listTrackedPrFilePaths(): Promise<string[]> {
+  await ensurePrFilesSchema();
+  const db = getDb();
+  const rows = await db.select({ path: prReviewFiles.path }).from(prReviewFiles).where(like(prReviewFiles.path, "pr/%"));
+  return rows.map((row) => row.path);
+}
+
 async function upsertPrFileSnapshot(snapshot: PrFileSnapshot, seenAt: Date): Promise<void> {
   const db = getDb();
   await db
@@ -226,7 +240,7 @@ async function ensurePrFilesSchema(): Promise<void> {
   schemaReady = true;
 }
 
-async function walkPrFiles(absoluteDir: string, relativeDir: string, files: PrFileSnapshot[]): Promise<void> {
+async function walkPrFilePaths(absoluteDir: string, relativeDir: string, paths: string[]): Promise<void> {
   const entries = await fs.readdir(absoluteDir, { withFileTypes: true });
   for (const entry of entries) {
     if (shouldIgnoreName(entry.name)) {
@@ -237,7 +251,7 @@ async function walkPrFiles(absoluteDir: string, relativeDir: string, files: PrFi
     const childRelative = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
 
     if (entry.isDirectory()) {
-      await walkPrFiles(childAbsolute, childRelative, files);
+      await walkPrFilePaths(childAbsolute, childRelative, paths);
       continue;
     }
 
@@ -245,22 +259,11 @@ async function walkPrFiles(absoluteDir: string, relativeDir: string, files: PrFi
       continue;
     }
 
-    const stats = await fs.stat(childAbsolute);
-    const docRelativePath = `pr/${toPosixPath(childRelative)}`;
-    const createdAt = await resolvePrFileCreatedAt(childAbsolute, docRelativePath, stats);
-
-    files.push({
-      path: docRelativePath,
-      name: entry.name,
-      dateFolder: extractDateFolder(docRelativePath),
-      category: extractCategory(docRelativePath),
-      createdAt,
-      modifiedAt: stats.mtime
-    });
+    paths.push(`pr/${toPosixPath(childRelative)}`);
   }
 }
 
-async function collectPrFilesSnapshot(): Promise<PrFileSnapshot[]> {
+async function collectPrFilePaths(): Promise<string[]> {
   const { absolutePath } = resolveDocsPath("pr");
   let stats: Awaited<ReturnType<typeof fs.stat>>;
 
@@ -278,9 +281,29 @@ async function collectPrFilesSnapshot(): Promise<PrFileSnapshot[]> {
     return [];
   }
 
-  const files: PrFileSnapshot[] = [];
-  await walkPrFiles(absolutePath, "", files);
-  return files;
+  const paths: string[] = [];
+  await walkPrFilePaths(absolutePath, "", paths);
+  return paths;
+}
+
+function chunkPaths(paths: string[], size = 400): string[][] {
+  const chunks: string[][] = [];
+  for (let index = 0; index < paths.length; index += size) {
+    chunks.push(paths.slice(index, index + size));
+  }
+  return chunks;
+}
+
+async function deletePrFilesByPaths(paths: string[]): Promise<void> {
+  if (paths.length === 0) {
+    return;
+  }
+
+  await ensurePrFilesSchema();
+  const db = getDb();
+  for (const chunk of chunkPaths(paths)) {
+    await db.delete(prReviewFiles).where(and(like(prReviewFiles.path, "pr/%"), inArray(prReviewFiles.path, chunk)));
+  }
 }
 
 export async function syncPrFilesSnapshot(): Promise<void> {
@@ -290,15 +313,26 @@ export async function syncPrFilesSnapshot(): Promise<void> {
 
   activeSync = (async () => {
     await ensurePrFilesSchema();
-    const db = getDb();
     const now = new Date();
-    const files = await collectPrFilesSnapshot();
+    const [currentPaths, existingPaths] = await Promise.all([collectPrFilePaths(), listTrackedPrFilePaths()]);
+    const currentPathSet = new Set(currentPaths);
+    const existingPathSet = new Set(existingPaths);
 
-    for (const file of files) {
-      await upsertPrFileSnapshot(file, now);
+    for (const inputPath of currentPaths) {
+      if (existingPathSet.has(inputPath)) {
+        continue;
+      }
+
+      const snapshot = await readPrFileSnapshot(inputPath);
+      if (!snapshot) {
+        continue;
+      }
+
+      await upsertPrFileSnapshot(snapshot, now);
     }
 
-    await db.delete(prReviewFiles).where(and(lt(prReviewFiles.lastSeenAt, now), sql`${prReviewFiles.path} LIKE 'pr/%'`));
+    const removedPaths = existingPaths.filter((inputPath) => !currentPathSet.has(inputPath));
+    await deletePrFilesByPaths(removedPaths);
   })().finally(() => {
     activeSync = null;
   });
@@ -317,6 +351,10 @@ export async function ensurePrFileTracked(inputPath: string): Promise<void> {
   await ensurePrFilesSchema();
   const normalizedPath = resolveDocsPath(inputPath).relativePath;
   if (!normalizedPath.startsWith("pr/")) {
+    return;
+  }
+
+  if (await hasTrackedPrFile(normalizedPath)) {
     return;
   }
 
