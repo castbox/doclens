@@ -41,6 +41,16 @@ export const prReviewFiles = sqliteTable("pr_review_files", {
   lastSeenAt: integer("last_seen_at", { mode: "timestamp" }).notNull()
 });
 
+export const docStates = sqliteTable("doc_states", {
+  path: text("path").primaryKey(),
+  name: text("name").notNull(),
+  isStarred: integer("is_starred", { mode: "boolean" }).notNull().default(false),
+  starredAt: integer("starred_at", { mode: "timestamp" }),
+  isRead: integer("is_read", { mode: "boolean" }).notNull().default(false),
+  readAt: integer("read_at", { mode: "timestamp" }),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull()
+});
+
 export const starredDocs = sqliteTable("starred_docs", {
   path: text("path").primaryKey(),
   name: text("name").notNull(),

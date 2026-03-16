@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import { getConfig } from "@/shared/utils/env";
 
 let dbInstance: ReturnType<typeof drizzle> | null = null;
+let sqliteInstance: Database.Database | null = null;
 
 export function getDb() {
   if (dbInstance) {
@@ -14,9 +15,15 @@ export function getDb() {
   const { dbPath } = getConfig();
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 
-  const sqlite = new Database(dbPath);
-  sqlite.pragma("journal_mode = WAL");
+  sqliteInstance = new Database(dbPath);
+  sqliteInstance.pragma("journal_mode = WAL");
 
-  dbInstance = drizzle(sqlite);
+  dbInstance = drizzle(sqliteInstance);
   return dbInstance;
+}
+
+export function resetDbClientForTests(): void {
+  sqliteInstance?.close();
+  sqliteInstance = null;
+  dbInstance = null;
 }

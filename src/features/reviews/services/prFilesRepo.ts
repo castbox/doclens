@@ -2,10 +2,10 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { and, desc, eq, like, lt, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { prReviewFiles } from "@/db/schema";
+import { docStates, prReviewFiles } from "@/db/schema";
 import type { PrFileReadFilter, PrFileRecord } from "@/features/reviews/domain/types";
 import { resolveDocsPath } from "@/features/docs/domain/pathRules";
-import { listStarredDocs } from "@/features/docs/services/docStarsRepo";
+import { ensureDocStatesSchema, setDocReadState } from "@/features/docs/services/docStatesRepo";
 import { getConfig } from "@/shared/utils/env";
 
 type PrFileSnapshot = {
@@ -111,7 +111,7 @@ async function addCategoryColumnIfMissing(): Promise<void> {
   }
 }
 
-function mapPrFile(row: typeof prReviewFiles.$inferSelect, starredAt: string | null): PrFileRecord {
+function mapPrFile(row: typeof prReviewFiles.$inferSelect, state: typeof docStates.$inferSelect | null): PrFileRecord {
   return {
     path: row.path,
     name: row.name,
@@ -119,11 +119,57 @@ function mapPrFile(row: typeof prReviewFiles.$inferSelect, starredAt: string | n
     category: row.category ?? "uncategorized",
     createdAt: toIso(row.createdAt) ?? new Date(0).toISOString(),
     modifiedAt: toIso(row.modifiedAt) ?? new Date(0).toISOString(),
-    isStarred: Boolean(starredAt),
-    starredAt,
-    isRead: Boolean(row.isRead),
-    readAt: toIso(row.readAt)
+    isStarred: Boolean(state?.isStarred),
+    starredAt: toIso(state?.starredAt ?? null),
+    isRead: Boolean(state?.isRead),
+    readAt: toIso(state?.readAt ?? null)
   };
+}
+
+async function listPrFileRows(filter?: { category?: string; readFilter?: PrFileReadFilter }) {
+  await ensurePrFilesSchema();
+  await ensureDocStatesSchema();
+  const db = getDb();
+  const conditions = [like(prReviewFiles.path, "pr/%")];
+
+  if (filter?.category) {
+    conditions.push(eq(prReviewFiles.category, filter.category));
+  }
+
+  if (filter?.readFilter === "read") {
+    conditions.push(eq(docStates.isRead, true));
+  }
+
+  if (filter?.readFilter === "unread") {
+    conditions.push(sql`(${docStates.isRead} IS NULL OR ${docStates.isRead} = 0)`);
+  }
+
+  return db
+    .select({
+      file: prReviewFiles,
+      state: docStates
+    })
+    .from(prReviewFiles)
+    .leftJoin(docStates, eq(prReviewFiles.path, docStates.path))
+    .where(and(...conditions))
+    .orderBy(desc(prReviewFiles.createdAt), desc(prReviewFiles.modifiedAt));
+}
+
+async function getPrFileRow(inputPath: string) {
+  await ensurePrFilesSchema();
+  await ensureDocStatesSchema();
+  const db = getDb();
+  const [row] = await db
+    .select({
+      file: prReviewFiles,
+      state: docStates
+    })
+    .from(prReviewFiles)
+    .leftJoin(docStates, eq(prReviewFiles.path, docStates.path))
+    .where(eq(prReviewFiles.path, inputPath))
+    .limit(1);
+
+  return row ?? null;
 }
 
 async function upsertPrFileSnapshot(snapshot: PrFileSnapshot, seenAt: Date): Promise<void> {
@@ -282,31 +328,8 @@ export async function ensurePrFileTracked(inputPath: string): Promise<void> {
 }
 
 export async function listPrFiles(filter?: { category?: string; readFilter?: PrFileReadFilter }): Promise<PrFileRecord[]> {
-  await ensurePrFilesSchema();
-  const db = getDb();
-  const conditions = [like(prReviewFiles.path, "pr/%")];
-
-  if (filter?.category) {
-    conditions.push(eq(prReviewFiles.category, filter.category));
-  }
-
-  if (filter?.readFilter === "read") {
-    conditions.push(eq(prReviewFiles.isRead, true));
-  }
-
-  if (filter?.readFilter === "unread") {
-    conditions.push(eq(prReviewFiles.isRead, false));
-  }
-
-  const rows = await db
-    .select()
-    .from(prReviewFiles)
-    .where(and(...conditions))
-    .orderBy(desc(prReviewFiles.createdAt), desc(prReviewFiles.modifiedAt));
-
-  const starredDocs = await listStarredDocs({ pathPrefix: "pr/" });
-  const starredAtByPath = new Map(starredDocs.map((item) => [item.path, item.starredAt]));
-  return rows.map((row) => mapPrFile(row, starredAtByPath.get(row.path) ?? null));
+  const rows = await listPrFileRows(filter);
+  return rows.map((row) => mapPrFile(row.file, row.state));
 }
 
 export async function listPrCategories(): Promise<string[]> {
@@ -322,6 +345,7 @@ export async function listPrCategories(): Promise<string[]> {
 
 export async function markPrFileRead(inputPath: string, isRead = true): Promise<PrFileRecord | null> {
   await ensurePrFilesSchema();
+  await ensureDocStatesSchema();
   const db = getDb();
 
   const [existing] = await db.select().from(prReviewFiles).where(eq(prReviewFiles.path, inputPath)).limit(1);
@@ -329,18 +353,7 @@ export async function markPrFileRead(inputPath: string, isRead = true): Promise<
     return null;
   }
 
-  const now = new Date();
-  await db
-    .update(prReviewFiles)
-    .set({
-      isRead,
-      readAt: isRead ? now : null,
-      lastSeenAt: now
-    })
-    .where(eq(prReviewFiles.path, inputPath));
-
-  const [updated] = await db.select().from(prReviewFiles).where(eq(prReviewFiles.path, inputPath)).limit(1);
-  const starredDocs = await listStarredDocs({ pathPrefix: "pr/" });
-  const starredAtByPath = new Map(starredDocs.map((item) => [item.path, item.starredAt]));
-  return updated ? mapPrFile(updated, starredAtByPath.get(updated.path) ?? null) : null;
+  await setDocReadState(inputPath, isRead, { name: existing.name });
+  const row = await getPrFileRow(inputPath);
+  return row ? mapPrFile(row.file, row.state) : null;
 }
