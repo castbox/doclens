@@ -31,3 +31,16 @@ export type PathMetaPayload =
       nodeType: "directory";
       modifiedAt: string;
     };
+
+export type DocStarStatus = {
+  path: string;
+  name: string;
+  isStarred: boolean;
+  starredAt: string | null;
+};
+
+export type StarredDocRecord = {
+  path: string;
+  name: string;
+  starredAt: string;
+};

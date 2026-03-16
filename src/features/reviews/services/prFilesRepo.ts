@@ -5,6 +5,7 @@ import { getDb } from "@/db/client";
 import { prReviewFiles } from "@/db/schema";
 import type { PrFileReadFilter, PrFileRecord } from "@/features/reviews/domain/types";
 import { resolveDocsPath } from "@/features/docs/domain/pathRules";
+import { listStarredDocs } from "@/features/docs/services/docStarsRepo";
 import { getConfig } from "@/shared/utils/env";
 
 type PrFileSnapshot = {
@@ -81,7 +82,7 @@ async function addCategoryColumnIfMissing(): Promise<void> {
   }
 }
 
-function mapPrFile(row: typeof prReviewFiles.$inferSelect): PrFileRecord {
+function mapPrFile(row: typeof prReviewFiles.$inferSelect, starredAt: string | null): PrFileRecord {
   return {
     path: row.path,
     name: row.name,
@@ -89,6 +90,8 @@ function mapPrFile(row: typeof prReviewFiles.$inferSelect): PrFileRecord {
     category: row.category ?? "uncategorized",
     createdAt: toIso(row.createdAt) ?? new Date(0).toISOString(),
     modifiedAt: toIso(row.modifiedAt) ?? new Date(0).toISOString(),
+    isStarred: Boolean(starredAt),
+    starredAt,
     isRead: Boolean(row.isRead),
     readAt: toIso(row.readAt)
   };
@@ -227,27 +230,28 @@ export async function listPrFiles(filter?: { category?: string; readFilter?: PrF
   const db = getDb();
   const rows = await db.select().from(prReviewFiles).orderBy(desc(prReviewFiles.createdAt), desc(prReviewFiles.modifiedAt));
 
-  return rows
-    .filter((row) => {
-      if (row.path.startsWith("pr/") === false) {
-        return false;
-      }
+  const filteredRows = rows.filter((row) => {
+    if (row.path.startsWith("pr/") === false) {
+      return false;
+    }
 
-      if (filter?.category && row.category !== filter.category) {
-        return false;
-      }
+    if (filter?.category && row.category !== filter.category) {
+      return false;
+    }
 
-      if (filter?.readFilter === "read") {
-        return Boolean(row.isRead);
-      }
+    if (filter?.readFilter === "read") {
+      return Boolean(row.isRead);
+    }
 
-      if (filter?.readFilter === "unread") {
-        return !row.isRead;
-      }
+    if (filter?.readFilter === "unread") {
+      return !row.isRead;
+    }
 
-      return true;
-    })
-    .map(mapPrFile);
+    return true;
+  });
+  const starredDocs = await listStarredDocs({ pathPrefix: "pr/" });
+  const starredAtByPath = new Map(starredDocs.map((item) => [item.path, item.starredAt]));
+  return filteredRows.map((row) => mapPrFile(row, starredAtByPath.get(row.path) ?? null));
 }
 
 export async function listPrCategories(): Promise<string[]> {
@@ -277,5 +281,7 @@ export async function markPrFileRead(inputPath: string, isRead = true): Promise<
     .where(eq(prReviewFiles.path, inputPath));
 
   const [updated] = await db.select().from(prReviewFiles).where(eq(prReviewFiles.path, inputPath)).limit(1);
-  return updated ? mapPrFile(updated) : null;
+  const starredDocs = await listStarredDocs({ pathPrefix: "pr/" });
+  const starredAtByPath = new Map(starredDocs.map((item) => [item.path, item.starredAt]));
+  return updated ? mapPrFile(updated, starredAtByPath.get(updated.path) ?? null) : null;
 }

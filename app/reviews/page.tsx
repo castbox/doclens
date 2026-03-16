@@ -3,16 +3,20 @@
 import * as React from "react";
 import { Alert, Box, Button, Container, Stack, TextField, Typography } from "@mui/material";
 import Link from "next/link";
+import type { StarredDocRecord } from "@/features/docs/domain/types";
 import type { ReviewSheet } from "@/features/reviews/domain/types";
 import { ReviewListTable } from "@/features/reviews/ui/ReviewListTable";
+import { StarredDocList } from "@/features/reviews/ui/StarredDocList";
 import { LoadingState } from "@/shared/ui/StateCard";
 
 export default function ReviewListPage(): React.JSX.Element {
   const [rows, setRows] = React.useState<ReviewSheet[]>([]);
+  const [starredDocs, setStarredDocs] = React.useState<StarredDocRecord[]>([]);
   const [status, setStatus] = React.useState("");
   const [docPath, setDocPath] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
+  const [starPendingPath, setStarPendingPath] = React.useState("");
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -28,13 +32,19 @@ export default function ReviewListPage(): React.JSX.Element {
         params.set("doc_path", docPath);
       }
 
-      const response = await fetch(`/api/reviews?${params.toString()}`);
-      const payload = (await response.json()) as { reviews?: ReviewSheet[]; error?: string };
-      if (!response.ok || !payload.reviews) {
-        throw new Error(payload.error ?? "加载失败");
+      const [reviewsResponse, starsResponse] = await Promise.all([fetch(`/api/reviews?${params.toString()}`), fetch("/api/docs/stars")]);
+      const reviewPayload = (await reviewsResponse.json()) as { reviews?: ReviewSheet[]; error?: string };
+      const starsPayload = (await starsResponse.json()) as { stars?: StarredDocRecord[]; error?: string };
+      if (!reviewsResponse.ok || !reviewPayload.reviews) {
+        throw new Error(reviewPayload.error ?? "加载失败");
       }
 
-      setRows(payload.reviews);
+      if (!starsResponse.ok || !starsPayload.stars) {
+        throw new Error(starsPayload.error ?? "加载星标文档失败");
+      }
+
+      setRows(reviewPayload.reviews);
+      setStarredDocs(starsPayload.stars);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "加载失败");
     } finally {
@@ -45,6 +55,31 @@ export default function ReviewListPage(): React.JSX.Element {
   React.useEffect(() => {
     void load();
   }, [load]);
+
+  const handleToggleStar = React.useCallback(
+    async (path: string, isStarred: boolean) => {
+      setStarPendingPath(path);
+
+      try {
+        const response = await fetch("/api/docs/stars", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path, isStarred: !isStarred })
+        });
+        const payload = (await response.json()) as { error?: string };
+        if (!response.ok) {
+          throw new Error(payload.error ?? "更新星标失败");
+        }
+
+        await load();
+      } catch (toggleError) {
+        setError(toggleError instanceof Error ? toggleError.message : "更新星标失败");
+      } finally {
+        setStarPendingPath("");
+      }
+    },
+    [load]
+  );
 
   return (
     <Container maxWidth="lg" sx={{ py: 2 }}>
@@ -89,7 +124,24 @@ export default function ReviewListPage(): React.JSX.Element {
         </Stack>
 
         {error ? <Alert severity="error">{error}</Alert> : null}
-        {loading ? <LoadingState label="加载审阅列表..." /> : <ReviewListTable rows={rows} />}
+        {loading ? (
+          <LoadingState label="加载审阅列表..." />
+        ) : (
+          <>
+            <StarredDocList
+              rows={starredDocs}
+              activeDocPath={docPath}
+              pendingPath={starPendingPath}
+              onSelectDoc={(path) => {
+                setDocPath(path);
+              }}
+              onToggleStar={(path, isStarred) => {
+                void handleToggleStar(path, isStarred);
+              }}
+            />
+            <ReviewListTable rows={rows} />
+          </>
+        )}
       </Stack>
     </Container>
   );

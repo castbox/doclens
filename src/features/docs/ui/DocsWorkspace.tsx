@@ -35,6 +35,7 @@ export function DocsWorkspace(): React.JSX.Element {
   const [docsDrawerOpen, setDocsDrawerOpen] = React.useState(false);
   const [reviewDrawerOpen, setReviewDrawerOpen] = React.useState(false);
   const [reviewRefreshToken, setReviewRefreshToken] = React.useState(0);
+  const [docStarRefreshToken, setDocStarRefreshToken] = React.useState(0);
   const pathTypeCacheRef = React.useRef<Map<string, DocsNodeType>>(new Map());
   const latestReadPath = React.useRef("");
 
@@ -314,6 +315,7 @@ export function DocsWorkspace(): React.JSX.Element {
             <DocPreview
               path={selectedPath}
               location={location}
+              starRefreshToken={docStarRefreshToken}
               onNavigatePath={(path) => {
                 selectPath(path);
               }}
@@ -337,6 +339,12 @@ export function DocsWorkspace(): React.JSX.Element {
                   // Ignore mark-read failures to avoid blocking preview rendering.
                 }
               }}
+              onStarChanged={(path) => {
+                setDocStarRefreshToken((prev) => prev + 1);
+                if (path.startsWith("pr/")) {
+                  setReviewRefreshToken((prev) => prev + 1);
+                }
+              }}
             />
           </Paper>
         </Stack>
@@ -347,8 +355,15 @@ export function DocsWorkspace(): React.JSX.Element {
         onOpenChange={setReviewDrawerOpen}
         selectedPath={selectedPath}
         refreshToken={reviewRefreshToken}
+        starRefreshToken={docStarRefreshToken}
         onOpenFile={(path) => {
           selectPath(path);
+        }}
+        onStarChanged={(path) => {
+          setDocStarRefreshToken((prev) => prev + 1);
+          if (path.startsWith("pr/")) {
+            setReviewRefreshToken((prev) => prev + 1);
+          }
         }}
       />
     </Box>

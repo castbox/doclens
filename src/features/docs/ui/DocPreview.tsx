@@ -7,11 +7,13 @@ import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import KeyboardDoubleArrowLeftIcon from "@mui/icons-material/KeyboardDoubleArrowLeft";
 import KeyboardDoubleArrowRightIcon from "@mui/icons-material/KeyboardDoubleArrowRight";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import StarBorderRoundedIcon from "@mui/icons-material/StarBorderRounded";
+import StarRoundedIcon from "@mui/icons-material/StarRounded";
 import {
   Alert,
-  CircularProgress,
   Box,
   Button,
+  CircularProgress,
   Chip,
   Divider,
   IconButton,
@@ -36,7 +38,7 @@ import {
 } from "@/features/docs/domain/markdownPreviewTransform";
 import { markdownSanitizeSchema } from "@/features/docs/domain/markdownSanitize";
 import { isMermaidLanguage, normalizeCodeBlockSource } from "@/features/docs/domain/mermaid";
-import type { FilePreviewPayload } from "@/features/docs/domain/types";
+import type { DocStarStatus, FilePreviewPayload } from "@/features/docs/domain/types";
 import { extractMarkdownHeadings } from "@/features/docs/domain/markdownHeading";
 import { DocBreadcrumb } from "@/features/docs/ui/DocBreadcrumb";
 import { DocOutline } from "@/features/docs/ui/DocOutline";
@@ -169,17 +171,24 @@ export function DocPreview({
   path,
   location,
   onNavigatePath,
-  onLoaded
+  onLoaded,
+  starRefreshToken,
+  onStarChanged
 }: {
   path: string;
   location?: PreviewLocation;
   onNavigatePath: (path: string) => void;
   onLoaded?: (path: string) => void;
+  starRefreshToken: number;
+  onStarChanged?: (path: string, isStarred: boolean) => void;
 }): React.JSX.Element {
   const previewCacheRef = React.useRef<Map<string, FilePreviewPayload>>(new Map());
   const [data, setData] = React.useState<FilePreviewPayload | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
+  const [starState, setStarState] = React.useState<DocStarStatus | null>(null);
+  const [starLoading, setStarLoading] = React.useState(false);
+  const [starSaving, setStarSaving] = React.useState(false);
   const [copyFeedback, setCopyFeedback] = React.useState<{ severity: "success" | "error"; message: string } | null>(null);
   const [outlineCollapsed, setOutlineCollapsed] = React.useState(true);
   const [fullContentPath, setFullContentPath] = React.useState<string | null>(null);
@@ -273,6 +282,51 @@ export function DocPreview({
       controller.abort();
     };
   }, [onLoaded, path, previewCacheKey, previewRequestUrl, writePreviewCache]);
+
+  React.useEffect(() => {
+    if (!path) {
+      setStarState(null);
+      setStarLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    const loadStarState = async () => {
+      setStarLoading(true);
+
+      try {
+        const response = await fetch(`/api/docs/stars?path=${encodeURIComponent(path)}`, {
+          signal: controller.signal
+        });
+        const payload = (await response.json()) as DocStarStatus & { error?: string };
+        if (!response.ok) {
+          throw new Error(payload.error ?? "加载星标状态失败");
+        }
+
+        setStarState(payload);
+      } catch (loadError) {
+        if (loadError instanceof DOMException && loadError.name === "AbortError") {
+          return;
+        }
+
+        setStarState({
+          path,
+          name: path.split("/").pop() ?? path,
+          isStarred: false,
+          starredAt: null
+        });
+      } finally {
+        setStarLoading(false);
+      }
+    };
+
+    void loadStarState();
+
+    return () => {
+      controller.abort();
+    };
+  }, [path, starRefreshToken]);
 
   React.useEffect(() => {
     if (!data || data.kind !== "markdown") {
@@ -379,6 +433,41 @@ export function DocPreview({
     [path]
   );
 
+  const handleToggleStar = React.useCallback(async () => {
+    if (!path || starSaving) {
+      return;
+    }
+
+    const nextStarred = !(starState?.isStarred ?? false);
+    setStarSaving(true);
+
+    try {
+      const response = await fetch("/api/docs/stars", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path, isStarred: nextStarred })
+      });
+      const payload = (await response.json()) as DocStarStatus & { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "更新星标失败");
+      }
+
+      setStarState(payload);
+      onStarChanged?.(payload.path, payload.isStarred);
+      setCopyFeedback({
+        severity: "success",
+        message: payload.isStarred ? "已加入星标" : "已取消星标"
+      });
+    } catch (toggleError) {
+      setCopyFeedback({
+        severity: "error",
+        message: toggleError instanceof Error ? toggleError.message : "更新星标失败"
+      });
+    } finally {
+      setStarSaving(false);
+    }
+  }, [onStarChanged, path, starSaving, starState?.isStarred]);
+
   if (!path) {
     return <EmptyState title="请选择文件" description="从左侧目录树选择一个文档开始预览" />;
   }
@@ -403,6 +492,35 @@ export function DocPreview({
           </Stack>
 
           <Stack direction="row" gap={0.5}>
+            <Tooltip title={starState?.isStarred ? "取消星标" : "加入星标"}>
+              <span>
+                <IconButton
+                  size="small"
+                  aria-label={starState?.isStarred ? "remove doc star" : "add doc star"}
+                  aria-pressed={starState?.isStarred ?? false}
+                  sx={{
+                    width: 40,
+                    height: 40,
+                    border: "1px solid",
+                    borderColor: starState?.isStarred ? "warning.main" : "divider",
+                    bgcolor: starState?.isStarred ? "rgba(245,158,11,0.12)" : "background.paper",
+                    color: starState?.isStarred ? "warning.dark" : "text.secondary"
+                  }}
+                  onClick={() => {
+                    void handleToggleStar();
+                  }}
+                  disabled={starLoading || starSaving}
+                >
+                  {starSaving || starLoading ? (
+                    <CircularProgress size={16} color="inherit" />
+                  ) : starState?.isStarred ? (
+                    <StarRoundedIcon fontSize="small" />
+                  ) : (
+                    <StarBorderRoundedIcon fontSize="small" />
+                  )}
+                </IconButton>
+              </span>
+            </Tooltip>
             <Tooltip title="复制路径">
               <IconButton
                 size="small"

@@ -68,6 +68,8 @@ export type PrFileRecord = {
   category: string;
   createdAt: string;
   modifiedAt: string;
+  isStarred: boolean;
+  starredAt: string | null;
   isRead: boolean;
   readAt: string | null;
 };

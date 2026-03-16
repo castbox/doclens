@@ -80,6 +80,15 @@ async function main() {
   await db.run(sql`CREATE INDEX IF NOT EXISTS pr_review_files_date_idx ON pr_review_files(date_folder);`);
   await db.run(sql`CREATE INDEX IF NOT EXISTS pr_review_files_category_idx ON pr_review_files(category);`);
   await db.run(sql`CREATE INDEX IF NOT EXISTS pr_review_files_created_idx ON pr_review_files(created_at DESC);`);
+
+  await db.run(sql`
+    CREATE TABLE IF NOT EXISTS starred_docs (
+      path TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      starred_at INTEGER NOT NULL
+    );
+  `);
+  await db.run(sql`CREATE INDEX IF NOT EXISTS starred_docs_starred_idx ON starred_docs(starred_at DESC);`);
 }
 
 main().catch((error) => {

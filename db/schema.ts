@@ -40,3 +40,9 @@ export const prReviewFiles = sqliteTable("pr_review_files", {
   readAt: integer("read_at", { mode: "timestamp" }),
   lastSeenAt: integer("last_seen_at", { mode: "timestamp" }).notNull()
 });
+
+export const starredDocs = sqliteTable("starred_docs", {
+  path: text("path").primaryKey(),
+  name: text("name").notNull(),
+  starredAt: integer("starred_at", { mode: "timestamp" }).notNull()
+});

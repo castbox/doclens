@@ -2,13 +2,17 @@
 
 import * as React from "react";
 import LaunchIcon from "@mui/icons-material/Launch";
+import StarBorderRoundedIcon from "@mui/icons-material/StarBorderRounded";
+import StarRoundedIcon from "@mui/icons-material/StarRounded";
 import {
   Alert,
   Box,
   Button,
+  CircularProgress,
   Chip,
   Divider,
   Drawer,
+  IconButton,
   List,
   ListItemButton,
   ListItemText,
@@ -37,13 +41,17 @@ export function ReviewDrawer({
   onOpenChange,
   selectedPath,
   onOpenFile,
-  refreshToken
+  refreshToken,
+  starRefreshToken,
+  onStarChanged
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   selectedPath: string;
   onOpenFile: (path: string) => void;
   refreshToken: number;
+  starRefreshToken: number;
+  onStarChanged?: (path: string, isStarred: boolean) => void;
 }): React.JSX.Element {
   const theme = useTheme();
   const isLgUp = useMediaQuery(theme.breakpoints.up("lg"));
@@ -54,6 +62,7 @@ export function ReviewDrawer({
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState("");
+  const [starPendingPath, setStarPendingPath] = React.useState("");
   const hasLoadedOnceRef = React.useRef(false);
 
   const loadFiles = React.useCallback(async (options?: { silent?: boolean }) => {
@@ -88,7 +97,7 @@ export function ReviewDrawer({
 
   React.useEffect(() => {
     void loadFiles({ silent: hasLoadedOnceRef.current });
-  }, [loadFiles, refreshToken]);
+  }, [loadFiles, refreshToken, starRefreshToken]);
 
   const files = React.useMemo(() => {
     return allFiles.filter((item) => {
@@ -125,6 +134,44 @@ export function ReviewDrawer({
       )
     );
   }, [selectedPath]);
+
+  const handleToggleStar = React.useCallback(
+    async (path: string, isStarred: boolean) => {
+      setStarPendingPath(path);
+
+      try {
+        const response = await fetch("/api/docs/stars", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path, isStarred: !isStarred })
+        });
+        const payload = (await response.json()) as { path?: string; isStarred?: boolean; starredAt?: string | null; error?: string };
+        if (!response.ok || !payload.path || typeof payload.isStarred !== "boolean") {
+          throw new Error(payload.error ?? "更新星标失败");
+        }
+        const nextIsStarred = payload.isStarred;
+        const nextStarredAt = payload.starredAt ?? null;
+
+        setAllFiles((prev) =>
+          prev.map((item) =>
+            item.path === payload.path
+              ? {
+                  ...item,
+                  isStarred: nextIsStarred,
+                  starredAt: nextStarredAt
+                }
+              : item
+          )
+        );
+        onStarChanged?.(payload.path, nextIsStarred);
+      } catch (toggleError) {
+        setError(toggleError instanceof Error ? toggleError.message : "更新星标失败");
+      } finally {
+        setStarPendingPath("");
+      }
+    },
+    [onStarChanged]
+  );
 
   return (
     <>
@@ -245,7 +292,40 @@ export function ReviewDrawer({
                             {item.name}
                           </Typography>
                         </Tooltip>
-                        <Chip label={item.isRead ? "已读" : "未读"} size="small" color={item.isRead ? "success" : "warning"} variant="outlined" />
+                        <Stack direction="row" spacing={0.5} alignItems="center">
+                          <Tooltip title={item.isStarred ? "取消星标" : "加入星标"}>
+                            <span>
+                              <IconButton
+                                size="small"
+                                aria-label={item.isStarred ? "remove pr star" : "add pr star"}
+                                aria-pressed={item.isStarred}
+                                sx={{
+                                  width: 40,
+                                  height: 40,
+                                  border: "1px solid",
+                                  borderColor: item.isStarred ? "warning.main" : "divider",
+                                  color: item.isStarred ? "warning.dark" : "text.secondary",
+                                  bgcolor: item.isStarred ? "rgba(245,158,11,0.12)" : "background.paper"
+                                }}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  void handleToggleStar(item.path, item.isStarred);
+                                }}
+                                disabled={starPendingPath === item.path}
+                              >
+                                {starPendingPath === item.path ? (
+                                  <CircularProgress size={16} color="inherit" />
+                                ) : item.isStarred ? (
+                                  <StarRoundedIcon fontSize="small" />
+                                ) : (
+                                  <StarBorderRoundedIcon fontSize="small" />
+                                )}
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          <Chip label={item.isRead ? "已读" : "未读"} size="small" color={item.isRead ? "success" : "warning"} variant="outlined" />
+                        </Stack>
                       </Stack>
                     }
                     secondary={
