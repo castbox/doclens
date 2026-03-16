@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { and, desc, eq, lt, sql } from "drizzle-orm";
+import { and, desc, eq, like, lt, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { prReviewFiles } from "@/db/schema";
 import type { PrFileReadFilter, PrFileRecord } from "@/features/reviews/domain/types";
@@ -19,7 +19,6 @@ type PrFileSnapshot = {
 
 let schemaReady = false;
 let activeSync: Promise<void> | null = null;
-
 function isDuplicateColumnError(error: unknown, columnName: string): boolean {
   if (!(error instanceof Error)) {
     return false;
@@ -68,6 +67,36 @@ function extractCategory(relativePath: string): string {
   return segments.length >= 4 ? segments[2] : "uncategorized";
 }
 
+async function readPrFileSnapshot(inputPath: string): Promise<PrFileSnapshot | null> {
+  const normalizedPath = resolveDocsPath(inputPath).relativePath;
+  const { absolutePath } = resolveDocsPath(normalizedPath);
+  let stats: Awaited<ReturnType<typeof fs.stat>>;
+
+  try {
+    stats = await fs.stat(absolutePath);
+  } catch (error) {
+    if (error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === "ENOENT") {
+      return null;
+    }
+
+    throw error;
+  }
+
+  if (!stats.isFile()) {
+    return null;
+  }
+
+  const createdAt = stats.birthtimeMs > 0 ? stats.birthtime : stats.mtime;
+  return {
+    path: normalizedPath,
+    name: path.posix.basename(normalizedPath),
+    dateFolder: extractDateFolder(normalizedPath),
+    category: extractCategory(normalizedPath),
+    createdAt,
+    modifiedAt: stats.mtime
+  };
+}
+
 async function addCategoryColumnIfMissing(): Promise<void> {
   const db = getDb();
 
@@ -95,6 +124,32 @@ function mapPrFile(row: typeof prReviewFiles.$inferSelect, starredAt: string | n
     isRead: Boolean(row.isRead),
     readAt: toIso(row.readAt)
   };
+}
+
+async function upsertPrFileSnapshot(snapshot: PrFileSnapshot, seenAt: Date): Promise<void> {
+  const db = getDb();
+  await db
+    .insert(prReviewFiles)
+    .values({
+      path: snapshot.path,
+      name: snapshot.name,
+      dateFolder: snapshot.dateFolder,
+      category: snapshot.category,
+      createdAt: snapshot.createdAt,
+      modifiedAt: snapshot.modifiedAt,
+      lastSeenAt: seenAt
+    })
+    .onConflictDoUpdate({
+      target: prReviewFiles.path,
+      set: {
+        name: snapshot.name,
+        dateFolder: snapshot.dateFolder,
+        category: snapshot.category,
+        createdAt: snapshot.createdAt,
+        modifiedAt: snapshot.modifiedAt,
+        lastSeenAt: seenAt
+      }
+    });
 }
 
 async function ensurePrFilesSchema(): Promise<void> {
@@ -193,28 +248,7 @@ export async function syncPrFilesSnapshot(): Promise<void> {
     const files = await collectPrFilesSnapshot();
 
     for (const file of files) {
-      await db
-        .insert(prReviewFiles)
-        .values({
-          path: file.path,
-          name: file.name,
-          dateFolder: file.dateFolder,
-          category: file.category,
-          createdAt: file.createdAt,
-          modifiedAt: file.modifiedAt,
-          lastSeenAt: now
-        })
-        .onConflictDoUpdate({
-          target: prReviewFiles.path,
-          set: {
-            name: file.name,
-            dateFolder: file.dateFolder,
-            category: file.category,
-            createdAt: file.createdAt,
-            modifiedAt: file.modifiedAt,
-            lastSeenAt: now
-          }
-        });
+      await upsertPrFileSnapshot(file, now);
     }
 
     await db.delete(prReviewFiles).where(and(lt(prReviewFiles.lastSeenAt, now), sql`${prReviewFiles.path} LIKE 'pr/%'`));
@@ -225,39 +259,64 @@ export async function syncPrFilesSnapshot(): Promise<void> {
   return activeSync;
 }
 
+export async function hasPrFilesSnapshot(): Promise<boolean> {
+  await ensurePrFilesSchema();
+  const db = getDb();
+  const [row] = await db.select({ path: prReviewFiles.path }).from(prReviewFiles).where(like(prReviewFiles.path, "pr/%")).limit(1);
+  return Boolean(row?.path);
+}
+
+export async function ensurePrFileTracked(inputPath: string): Promise<void> {
+  await ensurePrFilesSchema();
+  const normalizedPath = resolveDocsPath(inputPath).relativePath;
+  if (!normalizedPath.startsWith("pr/")) {
+    return;
+  }
+
+  const snapshot = await readPrFileSnapshot(normalizedPath);
+  if (!snapshot) {
+    return;
+  }
+
+  await upsertPrFileSnapshot(snapshot, new Date());
+}
+
 export async function listPrFiles(filter?: { category?: string; readFilter?: PrFileReadFilter }): Promise<PrFileRecord[]> {
   await ensurePrFilesSchema();
   const db = getDb();
-  const rows = await db.select().from(prReviewFiles).orderBy(desc(prReviewFiles.createdAt), desc(prReviewFiles.modifiedAt));
+  const conditions = [like(prReviewFiles.path, "pr/%")];
 
-  const filteredRows = rows.filter((row) => {
-    if (row.path.startsWith("pr/") === false) {
-      return false;
-    }
+  if (filter?.category) {
+    conditions.push(eq(prReviewFiles.category, filter.category));
+  }
 
-    if (filter?.category && row.category !== filter.category) {
-      return false;
-    }
+  if (filter?.readFilter === "read") {
+    conditions.push(eq(prReviewFiles.isRead, true));
+  }
 
-    if (filter?.readFilter === "read") {
-      return Boolean(row.isRead);
-    }
+  if (filter?.readFilter === "unread") {
+    conditions.push(eq(prReviewFiles.isRead, false));
+  }
 
-    if (filter?.readFilter === "unread") {
-      return !row.isRead;
-    }
+  const rows = await db
+    .select()
+    .from(prReviewFiles)
+    .where(and(...conditions))
+    .orderBy(desc(prReviewFiles.createdAt), desc(prReviewFiles.modifiedAt));
 
-    return true;
-  });
   const starredDocs = await listStarredDocs({ pathPrefix: "pr/" });
   const starredAtByPath = new Map(starredDocs.map((item) => [item.path, item.starredAt]));
-  return filteredRows.map((row) => mapPrFile(row, starredAtByPath.get(row.path) ?? null));
+  return rows.map((row) => mapPrFile(row, starredAtByPath.get(row.path) ?? null));
 }
 
 export async function listPrCategories(): Promise<string[]> {
   await ensurePrFilesSchema();
   const db = getDb();
-  const rows = await db.select({ category: prReviewFiles.category }).from(prReviewFiles);
+  const rows = await db
+    .select({ category: prReviewFiles.category })
+    .from(prReviewFiles)
+    .where(like(prReviewFiles.path, "pr/%"))
+    .groupBy(prReviewFiles.category);
   return Array.from(new Set(rows.map((row) => row.category))).sort((a, b) => a.localeCompare(b, "zh-CN"));
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import LaunchIcon from "@mui/icons-material/Launch";
 import StarBorderRoundedIcon from "@mui/icons-material/StarBorderRounded";
 import StarRoundedIcon from "@mui/icons-material/StarRounded";
@@ -26,7 +27,7 @@ import {
   useMediaQuery
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
-import type { PrFileReadFilter, PrFileRecord } from "@/features/reviews/domain/types";
+import type { PrFileReadFilter, PrFileRecord, PrFileStarUpdate } from "@/features/reviews/domain/types";
 import { formatDateTime } from "@/shared/domain/time";
 import { EmptyState, LoadingState } from "@/shared/ui/StateCard";
 
@@ -40,23 +41,129 @@ type ReviewDrawerTab = "all" | "starred";
 
 const DRAWER_WIDTH = 360;
 const APP_HEADER_HEIGHT = 64;
+const REFRESH_INTERVAL_MS = 60_000;
+
+const PrFileListItem = React.memo(function PrFileListItem({
+  item,
+  selectedPath,
+  showStarredAt,
+  isPending,
+  onOpenFile,
+  onToggleStar
+}: {
+  item: PrFileRecord;
+  selectedPath: string;
+  showStarredAt: boolean;
+  isPending: boolean;
+  onOpenFile: (path: string) => void;
+  onToggleStar: (path: string, isStarred: boolean) => void;
+}): React.JSX.Element {
+  return (
+    <ListItemButton
+      onClick={() => onOpenFile(item.path)}
+      sx={{
+        position: "relative",
+        mb: 0.8,
+        borderRadius: 1.2,
+        border: "1px solid",
+        borderColor: selectedPath === item.path ? "primary.main" : "divider",
+        bgcolor: selectedPath === item.path ? "rgba(11,114,133,0.08)" : "transparent",
+        py: 1,
+        "&::before": {
+          content: '""',
+          width: 8,
+          height: 8,
+          borderRadius: "50%",
+          position: "absolute",
+          left: 10,
+          top: 14,
+          backgroundColor: item.isRead ? "success.main" : "warning.main"
+        },
+        "&:hover": {
+          bgcolor: selectedPath === item.path ? "rgba(11,114,133,0.12)" : "action.hover"
+        },
+        transition: "background-color 180ms ease, border-color 180ms ease"
+      }}
+    >
+      <ListItemText
+        sx={{ pl: 1.25 }}
+        primary={
+          <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1} sx={{ minWidth: 0 }}>
+            <Tooltip title={item.name} placement="top-start" arrow>
+              <Typography variant="body2" fontWeight={600} noWrap sx={{ flex: 1, minWidth: 0 }}>
+                {item.name}
+              </Typography>
+            </Tooltip>
+            <Stack direction="row" spacing={0.5} alignItems="center">
+              <Tooltip title={item.isStarred ? "取消星标" : "加入星标"}>
+                <span>
+                  <IconButton
+                    size="small"
+                    aria-label={item.isStarred ? "remove pr star" : "add pr star"}
+                    aria-pressed={item.isStarred}
+                    sx={{
+                      width: 40,
+                      height: 40,
+                      border: "1px solid",
+                      borderColor: item.isStarred ? "warning.main" : "divider",
+                      color: item.isStarred ? "warning.dark" : "text.secondary",
+                      bgcolor: item.isStarred ? "rgba(245,158,11,0.12)" : "background.paper"
+                    }}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onToggleStar(item.path, item.isStarred);
+                    }}
+                    disabled={isPending}
+                  >
+                    {isPending ? (
+                      <CircularProgress size={16} color="inherit" />
+                    ) : item.isStarred ? (
+                      <StarRoundedIcon fontSize="small" />
+                    ) : (
+                      <StarBorderRoundedIcon fontSize="small" />
+                    )}
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Chip label={item.isRead ? "已读" : "未读"} size="small" color={item.isRead ? "success" : "warning"} variant="outlined" />
+            </Stack>
+          </Stack>
+        }
+        secondary={
+          <>
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+              类别：{item.category}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+              创建：{formatDateTime(item.createdAt)}
+            </Typography>
+            {showStarredAt && item.starredAt ? (
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                星标：{formatDateTime(item.starredAt)}
+              </Typography>
+            ) : null}
+          </>
+        }
+      />
+    </ListItemButton>
+  );
+});
 
 export function ReviewDrawer({
   open,
   onOpenChange,
   selectedPath,
   onOpenFile,
-  refreshToken,
-  starRefreshToken,
+  externalStarUpdate,
   onStarChanged
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   selectedPath: string;
   onOpenFile: (path: string) => void;
-  refreshToken: number;
-  starRefreshToken: number;
-  onStarChanged?: (path: string, isStarred: boolean) => void;
+  externalStarUpdate?: PrFileStarUpdate | null;
+  onStarChanged?: (path: string, isStarred: boolean, starredAt?: string | null) => void;
 }): React.JSX.Element {
   const theme = useTheme();
   const isLgUp = useMediaQuery(theme.breakpoints.up("lg"));
@@ -70,6 +177,7 @@ export function ReviewDrawer({
   const [error, setError] = React.useState("");
   const [starPendingPath, setStarPendingPath] = React.useState("");
   const hasLoadedOnceRef = React.useRef(false);
+  const listContainerRef = React.useRef<HTMLDivElement | null>(null);
 
   const loadFiles = React.useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false;
@@ -102,8 +210,26 @@ export function ReviewDrawer({
   }, []);
 
   React.useEffect(() => {
+    if (!open) {
+      return;
+    }
+
     void loadFiles({ silent: hasLoadedOnceRef.current });
-  }, [loadFiles, refreshToken, starRefreshToken]);
+  }, [loadFiles, open]);
+
+  React.useEffect(() => {
+    if (!open || !hasLoadedOnceRef.current) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void loadFiles({ silent: true });
+    }, REFRESH_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [loadFiles, open]);
 
   const totalStarredCount = React.useMemo(() => allFiles.filter((item) => item.isStarred).length, [allFiles]);
   const hasFilters = categoryFilter !== "" || readFilter !== "all";
@@ -137,6 +263,18 @@ export function ReviewDrawer({
   }, [filteredFiles]);
 
   const visibleFiles = activeTab === "starred" ? starredFiles : filteredFiles;
+  const estimatedRowHeight = activeTab === "starred" ? 124 : 108;
+  const rowVirtualizer = useVirtualizer({
+    count: visibleFiles.length,
+    getScrollElement: () => listContainerRef.current,
+    getItemKey: (index) => visibleFiles[index]?.path ?? index,
+    estimateSize: () => estimatedRowHeight,
+    overscan: 8
+  });
+
+  React.useEffect(() => {
+    listContainerRef.current?.scrollTo({ top: 0 });
+  }, [activeTab, categoryFilter, readFilter]);
 
   React.useEffect(() => {
     if (!selectedPath.startsWith("pr/")) {
@@ -155,6 +293,24 @@ export function ReviewDrawer({
       )
     );
   }, [selectedPath]);
+
+  React.useEffect(() => {
+    if (!externalStarUpdate || !externalStarUpdate.path.startsWith("pr/")) {
+      return;
+    }
+
+    setAllFiles((prev) =>
+      prev.map((item) =>
+        item.path === externalStarUpdate.path
+          ? {
+              ...item,
+              isStarred: externalStarUpdate.isStarred,
+              starredAt: externalStarUpdate.starredAt
+            }
+          : item
+      )
+    );
+  }, [externalStarUpdate]);
 
   const handleToggleStar = React.useCallback(
     async (path: string, isStarred: boolean) => {
@@ -184,7 +340,7 @@ export function ReviewDrawer({
               : item
           )
         );
-        onStarChanged?.(payload.path, nextIsStarred);
+        onStarChanged?.(payload.path, nextIsStarred, nextStarredAt);
       } catch (toggleError) {
         setError(toggleError instanceof Error ? toggleError.message : "更新星标失败");
       } finally {
@@ -232,19 +388,21 @@ export function ReviewDrawer({
           <Tabs
             value={activeTab}
             onChange={(_, value: ReviewDrawerTab) => {
-              setActiveTab(value);
+              React.startTransition(() => {
+                setActiveTab(value);
+              });
             }}
             variant="fullWidth"
             sx={{ minHeight: 40, mb: 1 }}
           >
             <Tab
               value="all"
-              label={`全部文件 ${allFiles.length}`}
+              label={`全部文件 ${allFiles.length.toLocaleString("zh-CN")}`}
               sx={{ minHeight: 40, textTransform: "none", fontWeight: 600 }}
             />
             <Tab
               value="starred"
-              label={`星标文档 ${totalStarredCount}`}
+              label={`星标文档 ${totalStarredCount.toLocaleString("zh-CN")}`}
               sx={{ minHeight: 40, textTransform: "none", fontWeight: 600 }}
             />
           </Tabs>
@@ -255,7 +413,9 @@ export function ReviewDrawer({
               label="类别"
               value={categoryFilter}
               onChange={(event) => {
-                setCategoryFilter(event.target.value);
+                React.startTransition(() => {
+                  setCategoryFilter(event.target.value);
+                });
               }}
               sx={{ minWidth: 140 }}
             >
@@ -272,7 +432,9 @@ export function ReviewDrawer({
               label="已读状态"
               value={readFilter}
               onChange={(event) => {
-                setReadFilter(event.target.value as PrFileReadFilter);
+                React.startTransition(() => {
+                  setReadFilter(event.target.value as PrFileReadFilter);
+                });
               }}
               sx={{ minWidth: 130 }}
             >
@@ -283,7 +445,7 @@ export function ReviewDrawer({
           </Stack>
         </Box>
 
-        <Box sx={{ flex: 1, overflowY: "auto", pr: 0.35, minHeight: 0 }}>
+        <Box ref={listContainerRef} sx={{ flex: 1, overflowY: "auto", pr: 0.35, minHeight: 0 }}>
           {refreshing ? (
             <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.75 }}>
               正在后台刷新...
@@ -307,98 +469,41 @@ export function ReviewDrawer({
           ) : null}
 
           {!loading && visibleFiles.length > 0 ? (
-            <List disablePadding>
-              {visibleFiles.map((item) => (
-                <ListItemButton
-                  key={item.path}
-                  onClick={() => onOpenFile(item.path)}
-                  sx={{
-                    position: "relative",
-                    mb: 0.8,
-                    borderRadius: 1.2,
-                    border: "1px solid",
-                    borderColor: selectedPath === item.path ? "primary.main" : "divider",
-                    bgcolor: selectedPath === item.path ? "rgba(11,114,133,0.08)" : "transparent",
-                    py: 1,
-                    "&::before": {
-                      content: '""',
-                      width: 8,
-                      height: 8,
-                      borderRadius: "50%",
+            <List
+              disablePadding
+              sx={{
+                position: "relative",
+                height: `${rowVirtualizer.getTotalSize()}px`
+              }}
+            >
+              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const item = visibleFiles[virtualRow.index];
+                return (
+                  <Box
+                    key={item.path}
+                    ref={rowVirtualizer.measureElement}
+                    data-index={virtualRow.index}
+                    sx={{
                       position: "absolute",
-                      left: 10,
-                      top: 14,
-                      backgroundColor: item.isRead ? "success.main" : "warning.main"
-                    },
-                    "&:hover": {
-                      bgcolor: selectedPath === item.path ? "rgba(11,114,133,0.12)" : "action.hover"
-                    },
-                    transition: "background-color 180ms ease, border-color 180ms ease"
-                  }}
-                >
-                  <ListItemText
-                    sx={{ pl: 1.25 }}
-                    primary={
-                      <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1} sx={{ minWidth: 0 }}>
-                        <Tooltip title={item.name} placement="top-start" arrow>
-                          <Typography variant="body2" fontWeight={600} noWrap sx={{ flex: 1, minWidth: 0 }}>
-                            {item.name}
-                          </Typography>
-                        </Tooltip>
-                        <Stack direction="row" spacing={0.5} alignItems="center">
-                          <Tooltip title={item.isStarred ? "取消星标" : "加入星标"}>
-                            <span>
-                              <IconButton
-                                size="small"
-                                aria-label={item.isStarred ? "remove pr star" : "add pr star"}
-                                aria-pressed={item.isStarred}
-                                sx={{
-                                  width: 40,
-                                  height: 40,
-                                  border: "1px solid",
-                                  borderColor: item.isStarred ? "warning.main" : "divider",
-                                  color: item.isStarred ? "warning.dark" : "text.secondary",
-                                  bgcolor: item.isStarred ? "rgba(245,158,11,0.12)" : "background.paper"
-                                }}
-                                onClick={(event) => {
-                                  event.preventDefault();
-                                  event.stopPropagation();
-                                  void handleToggleStar(item.path, item.isStarred);
-                                }}
-                                disabled={starPendingPath === item.path}
-                              >
-                                {starPendingPath === item.path ? (
-                                  <CircularProgress size={16} color="inherit" />
-                                ) : item.isStarred ? (
-                                  <StarRoundedIcon fontSize="small" />
-                                ) : (
-                                  <StarBorderRoundedIcon fontSize="small" />
-                                )}
-                              </IconButton>
-                            </span>
-                          </Tooltip>
-                          <Chip label={item.isRead ? "已读" : "未读"} size="small" color={item.isRead ? "success" : "warning"} variant="outlined" />
-                        </Stack>
-                      </Stack>
-                    }
-                    secondary={
-                      <>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-                          类别：{item.category}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-                          创建：{formatDateTime(item.createdAt)}
-                        </Typography>
-                        {activeTab === "starred" && item.starredAt ? (
-                          <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-                            星标：{formatDateTime(item.starredAt)}
-                          </Typography>
-                        ) : null}
-                      </>
-                    }
-                  />
-                </ListItemButton>
-              ))}
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      transform: `translateY(${virtualRow.start}px)`
+                    }}
+                  >
+                    <PrFileListItem
+                      item={item}
+                      selectedPath={selectedPath}
+                      showStarredAt={activeTab === "starred"}
+                      isPending={starPendingPath === item.path}
+                      onOpenFile={onOpenFile}
+                      onToggleStar={(path, isStarred) => {
+                        void handleToggleStar(path, isStarred);
+                      }}
+                    />
+                  </Box>
+                );
+              })}
             </List>
           ) : null}
         </Box>

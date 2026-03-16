@@ -75,3 +75,9 @@ export type PrFileRecord = {
 };
 
 export type PrFileReadFilter = "all" | "read" | "unread";
+
+export type PrFileStarUpdate = {
+  path: string;
+  isStarred: boolean;
+  starredAt: string | null;
+};

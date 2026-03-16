@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveDocsPath } from "@/features/docs/domain/pathRules";
 import { ensurePrFilesWatcherStarted } from "@/features/reviews/services/prFilesSyncService";
-import { markPrFileRead, syncPrFilesSnapshot } from "@/features/reviews/services/prFilesRepo";
+import { ensurePrFileTracked, markPrFileRead } from "@/features/reviews/services/prFilesRepo";
 import { badRequest, notFound, serverError } from "@/shared/utils/http";
 
 type MarkReadPayload = {
@@ -22,7 +22,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     }
 
     ensurePrFilesWatcherStarted();
-    await syncPrFilesSnapshot();
+    await ensurePrFileTracked(normalizedPath);
 
     const row = await markPrFileRead(normalizedPath, payload.isRead ?? true);
     if (!row) {

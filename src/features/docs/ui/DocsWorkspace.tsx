@@ -12,6 +12,7 @@ import type { PathMetaPayload } from "@/features/docs/domain/types";
 import { DocPreview } from "@/features/docs/ui/DocPreview";
 import { DocsStarredList } from "@/features/docs/ui/DocsStarredList";
 import { DocsTree } from "@/features/docs/ui/DocsTree";
+import type { PrFileStarUpdate } from "@/features/reviews/domain/types";
 import { ReviewDrawer } from "@/features/reviews/ui/ReviewDrawer";
 
 const DOCS_DRAWER_WIDTH = 320;
@@ -37,8 +38,8 @@ export function DocsWorkspace(): React.JSX.Element {
   const [docsDrawerOpen, setDocsDrawerOpen] = React.useState(false);
   const [docsDrawerTab, setDocsDrawerTab] = React.useState<DocsDrawerTab>("tree");
   const [reviewDrawerOpen, setReviewDrawerOpen] = React.useState(false);
-  const [reviewRefreshToken, setReviewRefreshToken] = React.useState(0);
   const [docStarRefreshToken, setDocStarRefreshToken] = React.useState(0);
+  const [latestPrStarUpdate, setLatestPrStarUpdate] = React.useState<PrFileStarUpdate | null>(null);
   const pathTypeCacheRef = React.useRef<Map<string, DocsNodeType>>(new Map());
   const latestReadPath = React.useRef("");
 
@@ -211,10 +212,14 @@ export function DocsWorkspace(): React.JSX.Element {
     [isMdUp, router, searchParamsString]
   );
 
-  const handleDocStarChanged = React.useCallback((path: string) => {
+  const handleDocStarChanged = React.useCallback((path: string, isStarred: boolean, starredAt?: string | null) => {
     setDocStarRefreshToken((prev) => prev + 1);
     if (path.startsWith("pr/")) {
-      setReviewRefreshToken((prev) => prev + 1);
+      setLatestPrStarUpdate({
+        path,
+        isStarred,
+        starredAt: isStarred ? starredAt ?? new Date().toISOString() : null
+      });
     }
   }, []);
 
@@ -321,8 +326,8 @@ export function DocsWorkspace(): React.JSX.Element {
             onSelectFile={(path) => {
               selectPath(path);
             }}
-            onStarChanged={(path) => {
-              handleDocStarChanged(path);
+            onStarChanged={(path, isStarred) => {
+              handleDocStarChanged(path, isStarred);
             }}
           />
         )}
@@ -363,21 +368,17 @@ export function DocsWorkspace(): React.JSX.Element {
 
                 latestReadPath.current = path;
                 try {
-                  const response = await fetch("/api/reviews/pr-files/read", {
+                  await fetch("/api/reviews/pr-files/read", {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ path, isRead: true })
                   });
-
-                  if (response.ok) {
-                    setReviewRefreshToken((prev) => prev + 1);
-                  }
                 } catch {
                   // Ignore mark-read failures to avoid blocking preview rendering.
                 }
               }}
-              onStarChanged={(path) => {
-                handleDocStarChanged(path);
+              onStarChanged={(path, isStarred, starredAt) => {
+                handleDocStarChanged(path, isStarred, starredAt);
               }}
             />
           </Paper>
@@ -388,13 +389,12 @@ export function DocsWorkspace(): React.JSX.Element {
         open={reviewDrawerOpen}
         onOpenChange={setReviewDrawerOpen}
         selectedPath={selectedPath}
-        refreshToken={reviewRefreshToken}
-        starRefreshToken={docStarRefreshToken}
+        externalStarUpdate={latestPrStarUpdate}
         onOpenFile={(path) => {
           selectPath(path);
         }}
-        onStarChanged={(path) => {
-          handleDocStarChanged(path);
+        onStarChanged={(path, isStarred, starredAt) => {
+          handleDocStarChanged(path, isStarred, starredAt);
         }}
       />
     </Box>

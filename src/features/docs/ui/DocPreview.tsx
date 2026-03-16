@@ -180,7 +180,7 @@ export function DocPreview({
   onNavigatePath: (path: string) => void;
   onLoaded?: (path: string) => void;
   starRefreshToken: number;
-  onStarChanged?: (path: string, isStarred: boolean) => void;
+  onStarChanged?: (path: string, isStarred: boolean, starredAt?: string | null) => void;
 }): React.JSX.Element {
   const previewCacheRef = React.useRef<Map<string, FilePreviewPayload>>(new Map());
   const [data, setData] = React.useState<FilePreviewPayload | null>(null);
@@ -453,7 +453,7 @@ export function DocPreview({
       }
 
       setStarState(payload);
-      onStarChanged?.(payload.path, payload.isStarred);
+      onStarChanged?.(payload.path, payload.isStarred, payload.starredAt);
       setCopyFeedback({
         severity: "success",
         message: payload.isStarred ? "已加入星标" : "已取消星标"

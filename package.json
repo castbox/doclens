@@ -18,6 +18,7 @@
     "@mui/icons-material": "^5.16.7",
     "@mui/material": "^5.16.7",
     "@mui/material-nextjs": "^5.16.7",
+    "@tanstack/react-virtual": "^3.13.23",
     "@turbodocx/html-to-docx": "^1.20.1",
     "@uiw/react-markdown-preview": "^5.1.5",
     "better-sqlite3": "^11.7.2",
