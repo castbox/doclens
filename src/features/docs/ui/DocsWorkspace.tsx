@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
-import { AppBar, Box, Button, Container, Divider, Drawer, Paper, Stack, Toolbar, Typography, useMediaQuery } from "@mui/material";
+import { AppBar, Box, Button, Container, Divider, Drawer, Paper, Stack, Tab, Tabs, Toolbar, Typography, useMediaQuery } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -10,12 +10,14 @@ import { parseLocationAnchor, stripPathAnchor } from "@/features/docs/domain/anc
 import { isPathWithinScope, normalizeDocsRouteState, type DocsNodeType } from "@/features/docs/domain/urlState";
 import type { PathMetaPayload } from "@/features/docs/domain/types";
 import { DocPreview } from "@/features/docs/ui/DocPreview";
+import { DocsStarredList } from "@/features/docs/ui/DocsStarredList";
 import { DocsTree } from "@/features/docs/ui/DocsTree";
 import { ReviewDrawer } from "@/features/reviews/ui/ReviewDrawer";
 
 const DOCS_DRAWER_WIDTH = 320;
 const REVIEW_DRAWER_WIDTH = 360;
 const APP_HEADER_HEIGHT = 64;
+type DocsDrawerTab = "tree" | "starred";
 
 export function DocsWorkspace(): React.JSX.Element {
   const theme = useTheme();
@@ -33,6 +35,7 @@ export function DocsWorkspace(): React.JSX.Element {
   const [scopePath, setScopePath] = React.useState("");
   const [location, setLocation] = React.useState<{ line?: number; heading?: string }>({});
   const [docsDrawerOpen, setDocsDrawerOpen] = React.useState(false);
+  const [docsDrawerTab, setDocsDrawerTab] = React.useState<DocsDrawerTab>("tree");
   const [reviewDrawerOpen, setReviewDrawerOpen] = React.useState(false);
   const [reviewRefreshToken, setReviewRefreshToken] = React.useState(0);
   const [docStarRefreshToken, setDocStarRefreshToken] = React.useState(0);
@@ -208,6 +211,13 @@ export function DocsWorkspace(): React.JSX.Element {
     [isMdUp, router, searchParamsString]
   );
 
+  const handleDocStarChanged = React.useCallback((path: string) => {
+    setDocStarRefreshToken((prev) => prev + 1);
+    if (path.startsWith("pr/")) {
+      setReviewRefreshToken((prev) => prev + 1);
+    }
+  }, []);
+
   return (
     <Box sx={{ minHeight: "100dvh" }}>
       <AppBar
@@ -269,7 +279,9 @@ export function DocsWorkspace(): React.JSX.Element {
             borderColor: "divider",
             bgcolor: "background.paper",
             top: APP_HEADER_HEIGHT,
-            height: `calc(100dvh - ${APP_HEADER_HEIGHT}px)`
+            height: `calc(100dvh - ${APP_HEADER_HEIGHT}px)`,
+            display: "flex",
+            flexDirection: "column"
           }
         }}
       >
@@ -282,13 +294,38 @@ export function DocsWorkspace(): React.JSX.Element {
           </Button>
         </Stack>
         <Divider sx={{ my: 1 }} />
-        <DocsTree
-          selectedPath={selectedPath}
-          scopePath={scopePath}
-          onSelectFile={(path) => {
-            selectPath(path);
+        <Tabs
+          value={docsDrawerTab}
+          onChange={(_, value: DocsDrawerTab) => {
+            setDocsDrawerTab(value);
           }}
-        />
+          variant="fullWidth"
+          sx={{ minHeight: 40, mb: 1 }}
+        >
+          <Tab value="tree" label="目录树" sx={{ minHeight: 40, textTransform: "none", fontWeight: 600 }} />
+          <Tab value="starred" label="星标文档" sx={{ minHeight: 40, textTransform: "none", fontWeight: 600 }} />
+        </Tabs>
+        {docsDrawerTab === "tree" ? (
+          <DocsTree
+            selectedPath={selectedPath}
+            scopePath={scopePath}
+            onSelectFile={(path) => {
+              selectPath(path);
+            }}
+          />
+        ) : (
+          <DocsStarredList
+            selectedPath={selectedPath}
+            scopePath={scopePath}
+            refreshToken={docStarRefreshToken}
+            onSelectFile={(path) => {
+              selectPath(path);
+            }}
+            onStarChanged={(path) => {
+              handleDocStarChanged(path);
+            }}
+          />
+        )}
       </Drawer>
 
       <Container
@@ -340,10 +377,7 @@ export function DocsWorkspace(): React.JSX.Element {
                 }
               }}
               onStarChanged={(path) => {
-                setDocStarRefreshToken((prev) => prev + 1);
-                if (path.startsWith("pr/")) {
-                  setReviewRefreshToken((prev) => prev + 1);
-                }
+                handleDocStarChanged(path);
               }}
             />
           </Paper>
@@ -360,10 +394,7 @@ export function DocsWorkspace(): React.JSX.Element {
           selectPath(path);
         }}
         onStarChanged={(path) => {
-          setDocStarRefreshToken((prev) => prev + 1);
-          if (path.startsWith("pr/")) {
-            setReviewRefreshToken((prev) => prev + 1);
-          }
+          handleDocStarChanged(path);
         }}
       />
     </Box>
