@@ -245,3 +245,7 @@ export async function setDocReadState(inputPath: string, isRead: boolean, option
 
   return getDocState(normalizedPath);
 }
+
+export function resetDocStatesRepoForTests(): void {
+  schemaReady = false;
+}

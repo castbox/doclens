@@ -7,6 +7,7 @@ import type { PrFileReadFilter, PrFileRecord } from "@/features/reviews/domain/t
 import { resolveDocsPath } from "@/features/docs/domain/pathRules";
 import { ensureDocStatesSchema, setDocReadState } from "@/features/docs/services/docStatesRepo";
 import { getConfig } from "@/shared/utils/env";
+import { resolvePrFileCreatedAt } from "./prFileCreatedAt";
 
 type PrFileSnapshot = {
   path: string;
@@ -86,7 +87,7 @@ async function readPrFileSnapshot(inputPath: string): Promise<PrFileSnapshot | n
     return null;
   }
 
-  const createdAt = stats.birthtimeMs > 0 ? stats.birthtime : stats.mtime;
+  const createdAt = await resolvePrFileCreatedAt(absolutePath, normalizedPath, stats);
   return {
     path: normalizedPath,
     name: path.posix.basename(normalizedPath),
@@ -245,8 +246,8 @@ async function walkPrFiles(absoluteDir: string, relativeDir: string, files: PrFi
     }
 
     const stats = await fs.stat(childAbsolute);
-    const createdAt = stats.birthtimeMs > 0 ? stats.birthtime : stats.mtime;
     const docRelativePath = `pr/${toPosixPath(childRelative)}`;
+    const createdAt = await resolvePrFileCreatedAt(childAbsolute, docRelativePath, stats);
 
     files.push({
       path: docRelativePath,
@@ -356,4 +357,9 @@ export async function markPrFileRead(inputPath: string, isRead = true): Promise<
   await setDocReadState(inputPath, isRead, { name: existing.name });
   const row = await getPrFileRow(inputPath);
   return row ? mapPrFile(row.file, row.state) : null;
+}
+
+export function resetPrFilesRepoForTests(): void {
+  schemaReady = false;
+  activeSync = null;
 }
