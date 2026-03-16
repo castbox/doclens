@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import LaunchIcon from "@mui/icons-material/Launch";
+import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import StarBorderRoundedIcon from "@mui/icons-material/StarBorderRounded";
 import StarRoundedIcon from "@mui/icons-material/StarRounded";
 import {
@@ -179,17 +180,18 @@ export function ReviewDrawer({
   const hasLoadedOnceRef = React.useRef(false);
   const listContainerRef = React.useRef<HTMLDivElement | null>(null);
 
-  const loadFiles = React.useCallback(async (options?: { silent?: boolean }) => {
+  const loadFiles = React.useCallback(async (options?: { silent?: boolean; forceSync?: boolean }) => {
     const silent = options?.silent ?? false;
+    const forceSync = options?.forceSync ?? false;
+    setError("");
     if (silent) {
       setRefreshing(true);
     } else {
       setLoading(true);
-      setError("");
     }
 
     try {
-      const response = await fetch("/api/reviews/pr-files");
+      const response = await fetch(forceSync ? "/api/reviews/pr-files?refresh=1" : "/api/reviews/pr-files");
       const payload = (await response.json()) as PrFilesPayload;
       if (!response.ok || !payload.files || !payload.categories) {
         throw new Error(payload.error ?? "加载 PR 文件失败");
@@ -350,6 +352,10 @@ export function ReviewDrawer({
     [onStarChanged]
   );
 
+  const handleRefresh = React.useCallback(() => {
+    void loadFiles({ silent: hasLoadedOnceRef.current, forceSync: true });
+  }, [loadFiles]);
+
   return (
     <>
       <Drawer
@@ -380,9 +386,24 @@ export function ReviewDrawer({
             <Typography variant="subtitle1" fontWeight={700}>
               PR 文件面板
             </Typography>
-            <Button size="small" onClick={() => onOpenChange(false)}>
-              收起
-            </Button>
+            <Stack direction="row" spacing={0.5} alignItems="center">
+              <Tooltip title={refreshing ? "正在刷新最新 PR 文件" : "刷新最新 PR 文件"}>
+                <span>
+                  <IconButton
+                    size="small"
+                    aria-label="刷新最新 PR 文件"
+                    onClick={handleRefresh}
+                    disabled={loading || refreshing}
+                    sx={{ width: 40, height: 40 }}
+                  >
+                    {refreshing ? <CircularProgress size={18} color="inherit" /> : <RefreshRoundedIcon fontSize="small" />}
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Button size="small" onClick={() => onOpenChange(false)}>
+                收起
+              </Button>
+            </Stack>
           </Stack>
           <Divider sx={{ my: 1 }} />
           <Tabs
