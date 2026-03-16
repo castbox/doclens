@@ -26,23 +26,9 @@ import {
   Tooltip,
   Typography
 } from "@mui/material";
-import MarkdownPreview from "@uiw/react-markdown-preview";
-import rehypeSanitize from "rehype-sanitize";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
-import {
-  autoLinkDocsMarkdownPaths,
-  buildAnchorHash,
-  preserveDiffSectionLineBreaks,
-  resolveMarkdownDocPath
-} from "@/features/docs/domain/markdownPreviewTransform";
-import { markdownSanitizeSchema } from "@/features/docs/domain/markdownSanitize";
-import { isMermaidLanguage, normalizeCodeBlockSource } from "@/features/docs/domain/mermaid";
-import type { DocStarStatus, FilePreviewPayload } from "@/features/docs/domain/types";
-import { extractMarkdownHeadings } from "@/features/docs/domain/markdownHeading";
+import dynamic from "next/dynamic";
+import type { DocStarStatus, DocStarUpdate, FilePreviewPayload } from "@/features/docs/domain/types";
 import { DocBreadcrumb } from "@/features/docs/ui/DocBreadcrumb";
-import { DocOutline } from "@/features/docs/ui/DocOutline";
-import { MermaidCodeBlock } from "@/features/docs/ui/MermaidCodeBlock";
 import { EmptyState, LoadingState } from "@/shared/ui/StateCard";
 import type { DocExportFormat } from "@/features/docs/domain/docExport";
 
@@ -54,11 +40,6 @@ type PreviewLocation = {
 function languageFromFilePath(filePath: string): string {
   const extension = filePath.includes(".") ? filePath.slice(filePath.lastIndexOf(".") + 1) : "txt";
   return extension.toLowerCase();
-}
-
-function languageFromCodeClassName(className?: string): string {
-  const matched = /language-([a-zA-Z0-9-]+)/.exec(className ?? "");
-  return matched?.[1] ?? "text";
 }
 
 function formatBytes(bytes: number): string {
@@ -92,13 +73,26 @@ function getDownloadFileName(contentDisposition: string | null, fallback: string
 }
 
 const ORANGE_CODE_COLOR = "#E96900";
-const INLINE_CODE_BG = "#F8F8F8";
 
-const codeSyntaxTheme = Object.fromEntries(
-  Object.entries(oneLight).map(([selector, style]) => {
-    return [selector, { ...(style as React.CSSProperties), color: ORANGE_CODE_COLOR }];
-  })
-) as typeof oneLight;
+const DocMarkdownPreviewBody = dynamic(
+  () => import("@/features/docs/ui/DocMarkdownPreviewBody").then((module) => module.DocMarkdownPreviewBody),
+  {
+    ssr: false,
+    loading: () => (
+      <Paper
+        variant="outlined"
+        sx={{
+          minHeight: 220,
+          display: "grid",
+          placeItems: "center",
+          p: 2
+        }}
+      >
+        <CircularProgress size={26} />
+      </Paper>
+    )
+  }
+);
 
 function CodeTextPreview({ content, filePath, location }: { content: string; filePath: string; location?: PreviewLocation }): React.JSX.Element {
   const lines = content.split(/\r?\n/);
@@ -167,19 +161,28 @@ function CodeTextPreview({ content, filePath, location }: { content: string; fil
   );
 }
 
+function buildFallbackStarState(path: string): DocStarStatus {
+  return {
+    path,
+    name: path.split("/").pop() ?? path,
+    isStarred: false,
+    starredAt: null
+  };
+}
+
 export function DocPreview({
   path,
   location,
   onNavigatePath,
   onLoaded,
-  starRefreshToken,
+  externalStarUpdate,
   onStarChanged
 }: {
   path: string;
   location?: PreviewLocation;
   onNavigatePath: (path: string) => void;
   onLoaded?: (path: string) => void;
-  starRefreshToken: number;
+  externalStarUpdate?: DocStarUpdate | null;
   onStarChanged?: (path: string, isStarred: boolean, starredAt?: string | null) => void;
 }): React.JSX.Element {
   const previewCacheRef = React.useRef<Map<string, FilePreviewPayload>>(new Map());
@@ -187,7 +190,6 @@ export function DocPreview({
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
   const [starState, setStarState] = React.useState<DocStarStatus | null>(null);
-  const [starLoading, setStarLoading] = React.useState(false);
   const [starSaving, setStarSaving] = React.useState(false);
   const [copyFeedback, setCopyFeedback] = React.useState<{ severity: "success" | "error"; message: string } | null>(null);
   const [outlineCollapsed, setOutlineCollapsed] = React.useState(true);
@@ -199,21 +201,14 @@ export function DocPreview({
   const previewRequestUrl = fullContentRequested
     ? `/api/docs/file?path=${encodeURIComponent(path)}&full=1`
     : `/api/docs/file?path=${encodeURIComponent(path)}`;
-  const markdownContent = React.useMemo(() => {
-    if (!data || data.kind !== "markdown") {
-      return "";
-    }
+  const markdownContent = data?.kind === "markdown" ? data.markdown?.renderedContent ?? data.content : "";
+  const markdownHeadings = data?.kind === "markdown" ? data.markdown?.headings ?? [] : [];
+  const codePreviewLocation = data?.kind === "code" || data?.kind === "text" ? location : undefined;
+  const onLoadedRef = React.useRef(onLoaded);
 
-    return autoLinkDocsMarkdownPaths(preserveDiffSectionLineBreaks(data.content));
-  }, [data]);
-
-  const markdownHeadings = React.useMemo(() => {
-    if (!markdownContent) {
-      return [];
-    }
-
-    return extractMarkdownHeadings(markdownContent);
-  }, [markdownContent]);
+  React.useEffect(() => {
+    onLoadedRef.current = onLoaded;
+  }, [onLoaded]);
 
   const writePreviewCache = React.useCallback((cacheKey: string, payload: FilePreviewPayload) => {
     const current = previewCacheRef.current;
@@ -231,22 +226,38 @@ export function DocPreview({
     }
   }, []);
 
+  const patchCachedStarState = React.useCallback((nextStarState: DocStarStatus) => {
+    for (const [cacheKey, payload] of Array.from(previewCacheRef.current.entries())) {
+      if (payload.path !== nextStarState.path) {
+        continue;
+      }
+
+      writePreviewCache(cacheKey, {
+        ...payload,
+        star: nextStarState
+      });
+    }
+  }, [writePreviewCache]);
+
   React.useEffect(() => {
     if (!path) {
       setData(null);
+      setStarState(null);
       return;
     }
 
     const cached = previewCacheRef.current.get(previewCacheKey);
     if (cached) {
       setData(cached);
+      setStarState(cached.star ?? buildFallbackStarState(cached.path));
       setError("");
       setLoading(false);
-      onLoaded?.(cached.path);
+      onLoadedRef.current?.(cached.path);
       return;
     }
 
     const controller = new AbortController();
+    let active = true;
 
     const load = async () => {
       setLoading(true);
@@ -262,71 +273,53 @@ export function DocPreview({
           throw new Error(payload.error ?? "加载文件失败");
         }
 
+        if (!active) {
+          return;
+        }
+
         setData(payload);
+        setStarState(payload.star ?? buildFallbackStarState(payload.path));
         writePreviewCache(previewCacheKey, payload);
-        onLoaded?.(payload.path);
+        onLoadedRef.current?.(payload.path);
       } catch (loadError) {
         if (loadError instanceof DOMException && loadError.name === "AbortError") {
           return;
         }
 
+        if (!active) {
+          return;
+        }
+
         setError(loadError instanceof Error ? loadError.message : "加载文件失败");
       } finally {
-        setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
     };
 
     void load();
 
     return () => {
+      active = false;
       controller.abort();
     };
-  }, [onLoaded, path, previewCacheKey, previewRequestUrl, writePreviewCache]);
+  }, [path, previewCacheKey, previewRequestUrl, writePreviewCache]);
 
   React.useEffect(() => {
-    if (!path) {
-      setStarState(null);
-      setStarLoading(false);
+    if (!externalStarUpdate || externalStarUpdate.path !== path) {
       return;
     }
 
-    const controller = new AbortController();
-
-    const loadStarState = async () => {
-      setStarLoading(true);
-
-      try {
-        const response = await fetch(`/api/docs/stars?path=${encodeURIComponent(path)}`, {
-          signal: controller.signal
-        });
-        const payload = (await response.json()) as DocStarStatus & { error?: string };
-        if (!response.ok) {
-          throw new Error(payload.error ?? "加载星标状态失败");
-        }
-
-        setStarState(payload);
-      } catch (loadError) {
-        if (loadError instanceof DOMException && loadError.name === "AbortError") {
-          return;
-        }
-
-        setStarState({
-          path,
-          name: path.split("/").pop() ?? path,
-          isStarred: false,
-          starredAt: null
-        });
-      } finally {
-        setStarLoading(false);
-      }
+    const nextStarState: DocStarStatus = {
+      path,
+      name: path.split("/").pop() ?? path,
+      isStarred: externalStarUpdate.isStarred,
+      starredAt: externalStarUpdate.starredAt
     };
-
-    void loadStarState();
-
-    return () => {
-      controller.abort();
-    };
-  }, [path, starRefreshToken]);
+    setStarState(nextStarState);
+    patchCachedStarState(nextStarState);
+  }, [externalStarUpdate, patchCachedStarState, path]);
 
   React.useEffect(() => {
     if (!data || data.kind !== "markdown") {
@@ -372,10 +365,8 @@ export function DocPreview({
     }
   }, [data, location?.heading, location?.line, markdownHeadings]);
 
-  const handleInternalDocLinkClick = React.useCallback(
-    (event: React.MouseEvent<HTMLAnchorElement>, targetPath: string, anchorHash: string) => {
-      event.preventDefault();
-
+  const handleMarkdownPathNavigate = React.useCallback(
+    (targetPath: string, anchorHash: string) => {
       if (targetPath === path) {
         if (anchorHash) {
           window.location.hash = anchorHash;
@@ -453,6 +444,7 @@ export function DocPreview({
       }
 
       setStarState(payload);
+      patchCachedStarState(payload);
       onStarChanged?.(payload.path, payload.isStarred, payload.starredAt);
       setCopyFeedback({
         severity: "success",
@@ -466,7 +458,90 @@ export function DocPreview({
     } finally {
       setStarSaving(false);
     }
-  }, [onStarChanged, path, starSaving, starState?.isStarred]);
+  }, [onStarChanged, patchCachedStarState, path, starSaving, starState?.isStarred]);
+
+  const previewBody = React.useMemo(() => {
+    if (loading || error || !data) {
+      return null;
+    }
+
+    return (
+      <>
+        {data.truncated ? (
+          <Alert
+            severity="warning"
+            action={
+              fullContentRequested ? (
+                <Button color="inherit" size="small" disabled>
+                  完整页面数据加载中
+                </Button>
+              ) : (
+                <Button
+                  color="inherit"
+                  size="small"
+                  onClick={() => {
+                    setFullContentPath(path);
+                  }}
+                >
+                  显示完整页面数据
+                </Button>
+              )
+            }
+          >
+            文件过大，已按策略截断预览，省略 {data.truncatedLines} 行。
+          </Alert>
+        ) : null}
+
+        {data.kind === "markdown" ? (
+          <DocMarkdownPreviewBody
+            path={path}
+            markdownContent={markdownContent}
+            markdownHeadings={markdownHeadings}
+            outlineCollapsed={outlineCollapsed}
+            onNavigatePath={handleMarkdownPathNavigate}
+          />
+        ) : null}
+
+        {data.kind === "code" || data.kind === "text" ? <CodeTextPreview content={data.content} filePath={path} location={codePreviewLocation} /> : null}
+
+        {data.kind === "pdf" ? (
+          <Paper variant="outlined" sx={{ minHeight: "65vh", overflow: "hidden" }}>
+            <Box sx={{ px: 1.5, py: 0.8, borderBottom: "1px solid", borderColor: "divider" }}>
+              <Typography variant="caption" color="text.secondary">
+                内嵌 PDF 预览
+              </Typography>
+            </Box>
+            <iframe
+              src={`/api/docs/file?path=${encodeURIComponent(path)}&raw=1`}
+              title={path}
+              width="100%"
+              height="860"
+              style={{ border: 0 }}
+            />
+          </Paper>
+        ) : null}
+
+        {data.kind === "binary" ? (
+          <Alert
+            severity="info"
+            action={
+              <Button
+                size="small"
+                variant="outlined"
+                href={`/api/docs/file?path=${encodeURIComponent(path)}&raw=1`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                下载
+              </Button>
+            }
+          >
+            当前文件不支持文本预览，请下载查看。
+          </Alert>
+        ) : null}
+      </>
+    );
+  }, [codePreviewLocation, data, error, fullContentRequested, handleMarkdownPathNavigate, loading, markdownContent, markdownHeadings, outlineCollapsed, path]);
 
   if (!path) {
     return <EmptyState title="请选择文件" description="从左侧目录树选择一个文档开始预览" />;
@@ -509,9 +584,9 @@ export function DocPreview({
                   onClick={() => {
                     void handleToggleStar();
                   }}
-                  disabled={starLoading || starSaving}
+                  disabled={starSaving}
                 >
-                  {starSaving || starLoading ? (
+                  {starSaving ? (
                     <CircularProgress size={16} color="inherit" />
                   ) : starState?.isStarred ? (
                     <StarRoundedIcon fontSize="small" />
@@ -644,344 +719,7 @@ export function DocPreview({
 
       {loading ? <LoadingState label="文件加载中..." /> : null}
       {error ? <Alert severity="error">{error}</Alert> : null}
-
-      {!loading && !error && data ? (
-        <>
-          {data.truncated ? (
-            <Alert
-              severity="warning"
-              action={
-                fullContentRequested ? (
-                  <Button color="inherit" size="small" disabled>
-                    完整页面数据加载中
-                  </Button>
-                ) : (
-                  <Button
-                    color="inherit"
-                    size="small"
-                    onClick={() => {
-                      setFullContentPath(path);
-                    }}
-                  >
-                    显示完整页面数据
-                  </Button>
-                )
-              }
-            >
-              文件过大，已按策略截断预览，省略 {data.truncatedLines} 行。
-            </Alert>
-          ) : null}
-
-          {data.kind === "markdown" ? (
-            <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ alignItems: { xs: "stretch", md: "flex-start" } }}>
-              {(() => {
-                let headingRenderIndex = 0;
-                const renderHeading =
-                  (tag: "h1" | "h2" | "h3" | "h4" | "h5" | "h6") =>
-                  ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>): React.JSX.Element => {
-                    const heading = markdownHeadings[headingRenderIndex];
-                    headingRenderIndex += 1;
-                    return React.createElement(tag, { ...props, id: heading?.slug }, children);
-                  };
-
-                return (
-              <Paper
-                id="markdown-preview-root"
-                variant="outlined"
-                sx={{
-                  flex: 1,
-                  width: "100%",
-                  minWidth: 0,
-                  p: { xs: 1.5, md: 2.25 },
-                  overflowX: "hidden",
-                  minHeight: 220,
-                  "& p": { lineHeight: 1.72, color: "text.primary" },
-                  "& p, & li, & td, & th, & blockquote, & a": {
-                    overflowWrap: "anywhere",
-                    wordBreak: "break-word"
-                  },
-                  "& h1, & h2, & h3, & h4, & h5, & h6": {
-                    scrollMarginTop: 84,
-                    lineHeight: 1.3
-                  },
-                  "& blockquote": {
-                    m: 0,
-                    px: 1.5,
-                    py: 0.75,
-                    borderLeft: "4px solid #A8C7E6",
-                    bgcolor: "rgba(11,114,133,0.05)",
-                    color: "text.secondary"
-                  },
-                  "& table": {
-                    width: "100%",
-                    borderCollapse: "collapse",
-                    my: 1.5
-                  },
-                  "& th, & td": {
-                    border: "1px solid #D7E4EE",
-                    px: 1,
-                    py: 0.8,
-                    textAlign: "left"
-                  },
-                  "& th": {
-                    bgcolor: "#F5F9FD"
-                  },
-                  "& code": {
-                    fontFamily: "var(--font-ibm-plex-mono)"
-                  },
-                  "& ul, & ol": {
-                    paddingInlineStart: "1.5rem"
-                  }
-                }}
-              >
-                <MarkdownPreview
-                  source={markdownContent}
-                  disableCopy
-                  wrapperElement={{ "data-color-mode": "light" }}
-                  rehypeRewrite={(node, _index, parent) => {
-                    if (
-                      node.type === "element" &&
-                      node.tagName === "a" &&
-                      parent &&
-                      parent.type === "element" &&
-                      /^h[1-6]$/.test(parent.tagName) &&
-                      node.properties?.ariaHidden === "true"
-                    ) {
-                      parent.children = parent.children.filter((child) => child !== node);
-                    }
-                  }}
-                  pluginsFilter={(type, plugins) => {
-                    if (type !== "rehype") {
-                      return plugins;
-                    }
-
-                    const filtered = plugins.filter((plugin) => {
-                      if (!Array.isArray(plugin)) {
-                        return true;
-                      }
-
-                      const pluginOptions = plugin[1];
-                      if (pluginOptions && typeof pluginOptions === "object" && "ignoreMissing" in pluginOptions) {
-                        return false;
-                      }
-
-                      return true;
-                    });
-
-                    return [...filtered, [rehypeSanitize, markdownSanitizeSchema]];
-                  }}
-                  components={{
-                    h1: renderHeading("h1"),
-                    h2: renderHeading("h2"),
-                    h3: renderHeading("h3"),
-                    h4: renderHeading("h4"),
-                    h5: renderHeading("h5"),
-                    h6: renderHeading("h6"),
-                    a({ href, children, ...props }) {
-                      const targetPath = resolveMarkdownDocPath(href, path);
-                      if (targetPath) {
-                        const anchorHash = buildAnchorHash(href);
-                        const targetHash = anchorHash ? `#${anchorHash}` : "";
-
-                        return (
-                          <a
-                            href={`/docs?path=${encodeURIComponent(targetPath)}${targetHash}`}
-                            style={{ color: "var(--mui-palette-secondary-main)", textDecoration: "underline", cursor: "pointer" }}
-                            onClick={(event) => {
-                              handleInternalDocLinkClick(event, targetPath, anchorHash);
-                            }}
-                            {...props}
-                          >
-                            {children}
-                          </a>
-                        );
-                      }
-
-                      return (
-                        <a href={href} target="_blank" rel="noreferrer" style={{ color: "var(--mui-palette-primary-main)" }} {...props}>
-                          {children}
-                        </a>
-                      );
-                    },
-                    code({ className, children }) {
-                      const rawValue = String(children ?? "");
-                      const value = normalizeCodeBlockSource(rawValue);
-                      const language = languageFromCodeClassName(className);
-                      const inline = !className && !rawValue.includes("\n");
-                      const mermaid = isMermaidLanguage(className);
-                      const inlineDocsPath = value.trim();
-                      const inlineTargetPath =
-                        inline && inlineDocsPath.startsWith("docs/") ? resolveMarkdownDocPath(inlineDocsPath, path) : null;
-
-                      if (mermaid) {
-                        return <MermaidCodeBlock code={value} syntaxTheme={codeSyntaxTheme} />;
-                      }
-
-                      if (inline && inlineTargetPath) {
-                        const anchorHash = buildAnchorHash(inlineDocsPath);
-                        const targetHash = anchorHash ? `#${anchorHash}` : "";
-
-                        return (
-                          <a
-                            href={`/docs?path=${encodeURIComponent(inlineTargetPath)}${targetHash}`}
-                            style={{ textDecoration: "none" }}
-                            onClick={(event) => {
-                              handleInternalDocLinkClick(event, inlineTargetPath, anchorHash);
-                            }}
-                          >
-                            <Box
-                              component="code"
-                              sx={{
-                                px: "5px",
-                                py: "3px",
-                                mx: "2px",
-                                borderRadius: "2px",
-                                bgcolor: INLINE_CODE_BG,
-                                color: "var(--mui-palette-secondary-main)",
-                                textDecoration: "underline",
-                                fontSize: "0.88em",
-                                whiteSpace: "pre-wrap",
-                                overflowWrap: "anywhere",
-                                wordBreak: "break-word",
-                                cursor: "pointer"
-                              }}
-                            >
-                              {value}
-                            </Box>
-                          </a>
-                        );
-                      }
-
-                      if (inline) {
-                        return (
-                          <Box
-                            component="code"
-                            sx={{
-                              px: "5px",
-                              py: "3px",
-                              mx: "2px",
-                              borderRadius: "2px",
-                              bgcolor: INLINE_CODE_BG,
-                              color: ORANGE_CODE_COLOR,
-                              fontSize: "0.88em",
-                              whiteSpace: "pre-wrap",
-                              overflowWrap: "anywhere",
-                              wordBreak: "break-word"
-                            }}
-                          >
-                            {value}
-                          </Box>
-                        );
-                      }
-
-                      return (
-                        <SyntaxHighlighter
-                          language={language}
-                          style={codeSyntaxTheme}
-                          showLineNumbers
-                          wrapLines
-                          wrapLongLines
-                          lineProps={(lineNumber) => ({
-                            style: {
-                              display: "block",
-                              backgroundColor: "transparent",
-                              whiteSpace: "pre-wrap",
-                              overflowWrap: "anywhere",
-                              wordBreak: "break-word"
-                            }
-                          })}
-                          lineNumberStyle={{
-                            minWidth: "2.5em",
-                            paddingLeft: "12px",
-                            paddingRight: "12px",
-                            color: "#64748B",
-                            userSelect: "none"
-                          }}
-                          customStyle={{
-                            margin: 0,
-                            padding: "12px 0",
-                            border: "1px solid #D7E4EE",
-                            borderRadius: "10px",
-                            fontSize: "13px",
-                            lineHeight: 1.65,
-                            background: "#F8F8F8",
-                            overflowX: "hidden"
-                          }}
-                          codeTagProps={{
-                            style: {
-                              fontFamily: "var(--font-ibm-plex-mono)",
-                              whiteSpace: "pre-wrap",
-                              overflowWrap: "anywhere",
-                              wordBreak: "break-word"
-                            }
-                          }}
-                        >
-                          {value}
-                        </SyntaxHighlighter>
-                      );
-                    }
-                  }}
-                />
-              </Paper>
-                );
-              })()}
-              {markdownHeadings.length > 0 && !outlineCollapsed ? (
-                <Box
-                  sx={{
-                    width: { xs: "100%", md: "clamp(220px, 24vw, 320px)" },
-                    flexShrink: 0,
-                    position: { xs: "static", md: "sticky" },
-                    top: { md: 76 },
-                    alignSelf: { md: "flex-start" },
-                    zIndex: 2,
-                    height: "fit-content"
-                  }}
-                >
-                  <DocOutline headings={markdownHeadings} />
-                </Box>
-              ) : null}
-            </Stack>
-          ) : null}
-
-          {data.kind === "code" || data.kind === "text" ? <CodeTextPreview content={data.content} filePath={path} location={location} /> : null}
-
-          {data.kind === "pdf" ? (
-            <Paper variant="outlined" sx={{ minHeight: "65vh", overflow: "hidden" }}>
-              <Box sx={{ px: 1.5, py: 0.8, borderBottom: "1px solid", borderColor: "divider" }}>
-                <Typography variant="caption" color="text.secondary">
-                  内嵌 PDF 预览
-                </Typography>
-              </Box>
-              <iframe
-                src={`/api/docs/file?path=${encodeURIComponent(path)}&raw=1`}
-                title={path}
-                width="100%"
-                height="860"
-                style={{ border: 0 }}
-              />
-            </Paper>
-          ) : null}
-
-          {data.kind === "binary" ? (
-            <Alert
-              severity="info"
-              action={
-                <Button
-                  size="small"
-                  variant="outlined"
-                  href={`/api/docs/file?path=${encodeURIComponent(path)}&raw=1`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  下载
-                </Button>
-              }
-            >
-              当前文件不支持文本预览，请下载查看。
-            </Alert>
-          ) : null}
-        </>
-      ) : null}
+      {previewBody}
 
       <Snackbar
         open={Boolean(copyFeedback)}

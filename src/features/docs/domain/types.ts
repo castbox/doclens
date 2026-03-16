@@ -1,4 +1,5 @@
 import type { PreviewKind } from "./fileType";
+import type { MarkdownHeading } from "./markdownHeading";
 
 export type TreeNode = {
   name: string;
@@ -16,6 +17,11 @@ export type FilePreviewPayload = {
   truncated: boolean;
   truncatedLines: number;
   content: string;
+  markdown?: {
+    renderedContent: string;
+    headings: MarkdownHeading[];
+  };
+  star?: DocStarStatus;
 };
 
 export type PathMetaPayload =
@@ -35,6 +41,12 @@ export type PathMetaPayload =
 export type DocStarStatus = {
   path: string;
   name: string;
+  isStarred: boolean;
+  starredAt: string | null;
+};
+
+export type DocStarUpdate = {
+  path: string;
   isStarred: boolean;
   starredAt: string | null;
 };

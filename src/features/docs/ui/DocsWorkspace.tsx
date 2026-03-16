@@ -8,7 +8,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { parseLocationAnchor, stripPathAnchor } from "@/features/docs/domain/anchor";
 import { isPathWithinScope, normalizeDocsRouteState, type DocsNodeType } from "@/features/docs/domain/urlState";
-import type { PathMetaPayload } from "@/features/docs/domain/types";
+import type { DocStarUpdate, PathMetaPayload } from "@/features/docs/domain/types";
 import { DocPreview } from "@/features/docs/ui/DocPreview";
 import { DocsStarredList } from "@/features/docs/ui/DocsStarredList";
 import { DocsTree } from "@/features/docs/ui/DocsTree";
@@ -39,6 +39,7 @@ export function DocsWorkspace(): React.JSX.Element {
   const [docsDrawerTab, setDocsDrawerTab] = React.useState<DocsDrawerTab>("tree");
   const [reviewDrawerOpen, setReviewDrawerOpen] = React.useState(false);
   const [docStarRefreshToken, setDocStarRefreshToken] = React.useState(0);
+  const [latestDocStarUpdate, setLatestDocStarUpdate] = React.useState<DocStarUpdate | null>(null);
   const [latestPrStarUpdate, setLatestPrStarUpdate] = React.useState<PrFileStarUpdate | null>(null);
   const pathTypeCacheRef = React.useRef<Map<string, DocsNodeType>>(new Map());
   const latestReadPath = React.useRef("");
@@ -69,8 +70,15 @@ export function DocsWorkspace(): React.JSX.Element {
       setSelectedPath("");
     }
 
-    const shouldDelayPreview = !scopeParam && Boolean(pathParam);
-    if (shouldDelayPreview) {
+    const cachedPathNodeType = pathParam ? pathTypeCacheRef.current.get(pathParam) : undefined;
+    const canUseOptimisticPath =
+      Boolean(pathParam) &&
+      cachedPathNodeType === "file" &&
+      (!scopeParam || pathParam === scopeParam || isPathWithinScope(pathParam, scopeParam));
+
+    if (canUseOptimisticPath) {
+      setSelectedPath(pathParam);
+    } else if (!scopeParam && pathParam) {
       setSelectedPath("");
     }
 
@@ -193,6 +201,7 @@ export function DocsWorkspace(): React.JSX.Element {
       }
 
       if (safePath) {
+        pathTypeCacheRef.current.set(safePath, "file");
         params.set("path", safePath);
       } else {
         params.delete("path");
@@ -214,6 +223,11 @@ export function DocsWorkspace(): React.JSX.Element {
 
   const handleDocStarChanged = React.useCallback((path: string, isStarred: boolean, starredAt?: string | null) => {
     setDocStarRefreshToken((prev) => prev + 1);
+    setLatestDocStarUpdate({
+      path,
+      isStarred,
+      starredAt: isStarred ? starredAt ?? new Date().toISOString() : null
+    });
     if (path.startsWith("pr/")) {
       setLatestPrStarUpdate({
         path,
@@ -222,6 +236,38 @@ export function DocsWorkspace(): React.JSX.Element {
       });
     }
   }, []);
+
+  const handlePreviewNavigate = React.useCallback(
+    (path: string) => {
+      selectPath(path);
+    },
+    [selectPath]
+  );
+
+  const handlePreviewLoaded = React.useCallback(async (path: string) => {
+    pathTypeCacheRef.current.set(path, "file");
+    if (!path.startsWith("pr/") || latestReadPath.current === path) {
+      return;
+    }
+
+    latestReadPath.current = path;
+    try {
+      await fetch("/api/reviews/pr-files/read", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path, isRead: true })
+      });
+    } catch {
+      // Ignore mark-read failures to avoid blocking preview rendering.
+    }
+  }, []);
+
+  const handlePreviewStarChanged = React.useCallback(
+    (path: string, isStarred: boolean, starredAt?: string | null) => {
+      handleDocStarChanged(path, isStarred, starredAt);
+    },
+    [handleDocStarChanged]
+  );
 
   return (
     <Box sx={{ minHeight: "100dvh" }}>
@@ -357,29 +403,10 @@ export function DocsWorkspace(): React.JSX.Element {
             <DocPreview
               path={selectedPath}
               location={location}
-              starRefreshToken={docStarRefreshToken}
-              onNavigatePath={(path) => {
-                selectPath(path);
-              }}
-              onLoaded={async (path) => {
-                if (!path.startsWith("pr/") || latestReadPath.current === path) {
-                  return;
-                }
-
-                latestReadPath.current = path;
-                try {
-                  await fetch("/api/reviews/pr-files/read", {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ path, isRead: true })
-                  });
-                } catch {
-                  // Ignore mark-read failures to avoid blocking preview rendering.
-                }
-              }}
-              onStarChanged={(path, isStarred, starredAt) => {
-                handleDocStarChanged(path, isStarred, starredAt);
-              }}
+              externalStarUpdate={latestDocStarUpdate}
+              onNavigatePath={handlePreviewNavigate}
+              onLoaded={handlePreviewLoaded}
+              onStarChanged={handlePreviewStarChanged}
             />
           </Paper>
         </Stack>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripPathAnchor } from "@/features/docs/domain/anchor";
 import { PathSecurityError } from "@/features/docs/domain/pathRules";
+import { getDocStarStatus } from "@/features/docs/services/docStarsRepo";
 import { readFilePreview, readRawFile } from "@/features/docs/services/docsFsService";
 import { badRequest, serverError } from "@/shared/utils/http";
 
@@ -27,8 +28,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
 
     const full = request.nextUrl.searchParams.get("full") === "1";
-    const payload = await readFilePreview(safePathParam, { fullContent: full });
-    return NextResponse.json(payload);
+    const [payload, star] = await Promise.all([readFilePreview(safePathParam, { fullContent: full }), getDocStarStatus(safePathParam)]);
+    return NextResponse.json({
+      ...payload,
+      star
+    });
   } catch (error) {
     if (error instanceof PathSecurityError || error instanceof Error) {
       return badRequest(error.message);

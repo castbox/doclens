@@ -2,13 +2,23 @@ import fs from "node:fs/promises";
 import { createReadStream } from "node:fs";
 import path from "node:path";
 import { detectPreviewKind } from "@/features/docs/domain/fileType";
+import { extractMarkdownHeadings } from "@/features/docs/domain/markdownHeading";
+import { autoLinkDocsMarkdownPaths, preserveDiffSectionLineBreaks } from "@/features/docs/domain/markdownPreviewTransform";
 import type { FilePreviewPayload, PathMetaPayload, TreeNode } from "@/features/docs/domain/types";
 import { resolveDocsPath } from "@/features/docs/domain/pathRules";
+import { LRUCache } from "@/shared/domain/lru";
 import { getConfig } from "@/shared/utils/env";
 
 type ReadFilePreviewOptions = {
   fullContent?: boolean;
 };
+
+type PreviewCacheEntry = {
+  version: string;
+  payload: FilePreviewPayload;
+};
+
+const docsPreviewCache = new LRUCache<string, PreviewCacheEntry>(120);
 
 function shouldIgnoreName(name: string): boolean {
   const { searchIgnore } = getConfig();
@@ -85,6 +95,30 @@ function truncateByLines(content: string, maxLines: number): { content: string; 
   };
 }
 
+function buildPreviewCacheKey(absolutePath: string, fullContent: boolean): string {
+  return `${absolutePath}::${fullContent ? "full" : "preview"}`;
+}
+
+function buildPreviewVersion(stats: Awaited<ReturnType<typeof fs.stat>>, fullContent: boolean): string {
+  return `${stats.mtimeMs}:${stats.size}:${fullContent ? 1 : 0}`;
+}
+
+function buildMarkdownPreview(content: string): NonNullable<FilePreviewPayload["markdown"]> {
+  const renderedContent = autoLinkDocsMarkdownPaths(preserveDiffSectionLineBreaks(content));
+  return {
+    renderedContent,
+    headings: extractMarkdownHeadings(renderedContent)
+  };
+}
+
+function cachePreview(cacheKey: string, version: string, payload: FilePreviewPayload): FilePreviewPayload {
+  docsPreviewCache.set(cacheKey, {
+    version,
+    payload
+  });
+  return payload;
+}
+
 export async function readFilePreview(inputPath: string, options: ReadFilePreviewOptions = {}): Promise<FilePreviewPayload> {
   const { absolutePath, relativePath } = resolveDocsPath(inputPath);
   const { maxPreviewBytes, maxPreviewLines } = getConfig();
@@ -98,9 +132,15 @@ export async function readFilePreview(inputPath: string, options: ReadFilePrevie
   const name = path.basename(absolutePath);
   const kind = detectPreviewKind(name);
   const size = stats.size;
+  const cacheKey = buildPreviewCacheKey(absolutePath, fullContent);
+  const version = buildPreviewVersion(stats, fullContent);
+  const cached = docsPreviewCache.get(cacheKey);
+  if (cached && cached.version === version) {
+    return cached.payload;
+  }
 
   if (kind === "pdf" || kind === "binary") {
-    return {
+    return cachePreview(cacheKey, version, {
       path: relativePath,
       name,
       kind,
@@ -109,14 +149,14 @@ export async function readFilePreview(inputPath: string, options: ReadFilePrevie
       truncated: false,
       truncatedLines: 0,
       content: ""
-    };
+    });
   }
 
   let rawContent: string;
 
   rawContent = await fs.readFile(absolutePath, { encoding: "utf8" });
   if (fullContent) {
-    return {
+    return cachePreview(cacheKey, version, {
       path: relativePath,
       name,
       kind,
@@ -124,13 +164,14 @@ export async function readFilePreview(inputPath: string, options: ReadFilePrevie
       modifiedAt: stats.mtime.toISOString(),
       truncated: false,
       truncatedLines: 0,
-      content: rawContent
-    };
+      content: rawContent,
+      markdown: kind === "markdown" ? buildMarkdownPreview(rawContent) : undefined
+    });
   }
 
   if (size > maxPreviewBytes) {
     const truncated = truncateByLines(rawContent, maxPreviewLines);
-    return {
+    return cachePreview(cacheKey, version, {
       path: relativePath,
       name,
       kind,
@@ -138,13 +179,14 @@ export async function readFilePreview(inputPath: string, options: ReadFilePrevie
       modifiedAt: stats.mtime.toISOString(),
       truncated: true,
       truncatedLines: truncated.truncatedLines,
-      content: truncated.content
-    };
+      content: truncated.content,
+      markdown: kind === "markdown" ? buildMarkdownPreview(truncated.content) : undefined
+    });
   }
 
   const lineTruncated = truncateByLines(rawContent, maxPreviewLines);
 
-  return {
+  return cachePreview(cacheKey, version, {
     path: relativePath,
     name,
     kind,
@@ -152,8 +194,9 @@ export async function readFilePreview(inputPath: string, options: ReadFilePrevie
     modifiedAt: stats.mtime.toISOString(),
     truncated: lineTruncated.truncated,
     truncatedLines: lineTruncated.truncatedLines,
-    content: lineTruncated.content
-  };
+    content: lineTruncated.content,
+    markdown: kind === "markdown" ? buildMarkdownPreview(lineTruncated.content) : undefined
+  });
 }
 
 export async function readRawFile(inputPath: string): Promise<{ stream: ReadableStream<Uint8Array>; contentType: string; fileName: string }> {
