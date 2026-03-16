@@ -18,6 +18,8 @@ import {
   ListItemText,
   MenuItem,
   Stack,
+  Tab,
+  Tabs,
   TextField,
   Tooltip,
   Typography,
@@ -33,6 +35,9 @@ type PrFilesPayload = {
   categories?: string[];
   error?: string;
 };
+
+type ReviewDrawerTab = "all" | "starred";
+
 const DRAWER_WIDTH = 360;
 const APP_HEADER_HEIGHT = 64;
 
@@ -57,6 +62,7 @@ export function ReviewDrawer({
   const isLgUp = useMediaQuery(theme.breakpoints.up("lg"));
   const [allFiles, setAllFiles] = React.useState<PrFileRecord[]>([]);
   const [categories, setCategories] = React.useState<string[]>([]);
+  const [activeTab, setActiveTab] = React.useState<ReviewDrawerTab>("all");
   const [categoryFilter, setCategoryFilter] = React.useState("");
   const [readFilter, setReadFilter] = React.useState<PrFileReadFilter>("all");
   const [loading, setLoading] = React.useState(true);
@@ -99,7 +105,10 @@ export function ReviewDrawer({
     void loadFiles({ silent: hasLoadedOnceRef.current });
   }, [loadFiles, refreshToken, starRefreshToken]);
 
-  const files = React.useMemo(() => {
+  const totalStarredCount = React.useMemo(() => allFiles.filter((item) => item.isStarred).length, [allFiles]);
+  const hasFilters = categoryFilter !== "" || readFilter !== "all";
+
+  const filteredFiles = React.useMemo(() => {
     return allFiles.filter((item) => {
       if (categoryFilter && item.category !== categoryFilter) {
         return false;
@@ -116,6 +125,18 @@ export function ReviewDrawer({
       return true;
     });
   }, [allFiles, categoryFilter, readFilter]);
+
+  const starredFiles = React.useMemo(() => {
+    return [...filteredFiles]
+      .filter((item) => item.isStarred)
+      .sort((left, right) => {
+        const leftTime = left.starredAt ? new Date(left.starredAt).getTime() : 0;
+        const rightTime = right.starredAt ? new Date(right.starredAt).getTime() : 0;
+        return rightTime - leftTime;
+      });
+  }, [filteredFiles]);
+
+  const visibleFiles = activeTab === "starred" ? starredFiles : filteredFiles;
 
   React.useEffect(() => {
     if (!selectedPath.startsWith("pr/")) {
@@ -208,6 +229,25 @@ export function ReviewDrawer({
             </Button>
           </Stack>
           <Divider sx={{ my: 1 }} />
+          <Tabs
+            value={activeTab}
+            onChange={(_, value: ReviewDrawerTab) => {
+              setActiveTab(value);
+            }}
+            variant="fullWidth"
+            sx={{ minHeight: 40, mb: 1 }}
+          >
+            <Tab
+              value="all"
+              label={`全部文件 ${allFiles.length}`}
+              sx={{ minHeight: 40, textTransform: "none", fontWeight: 600 }}
+            />
+            <Tab
+              value="starred"
+              label={`星标文档 ${totalStarredCount}`}
+              sx={{ minHeight: 40, textTransform: "none", fontWeight: 600 }}
+            />
+          </Tabs>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={0.8}>
             <TextField
               select
@@ -252,11 +292,23 @@ export function ReviewDrawer({
           {loading ? <LoadingState label="加载 PR 文件..." /> : null}
           {error ? <Alert severity="error">{error}</Alert> : null}
 
-          {!loading && files.length === 0 ? <EmptyState title="暂无 PR 文件" description="请检查 docs/pr 目录是否存在文件" /> : null}
+          {!loading && visibleFiles.length === 0 ? (
+            activeTab === "starred" ? (
+              <EmptyState
+                title={hasFilters ? "当前筛选下暂无星标文档" : "暂无星标文档"}
+                description={hasFilters ? "请调整类别或已读筛选条件后重试" : "可先在“全部文件”标签中为重点 PR 文件加入星标"}
+              />
+            ) : (
+              <EmptyState
+                title={hasFilters ? "当前筛选下暂无 PR 文件" : "暂无 PR 文件"}
+                description={hasFilters ? "请调整类别或已读筛选条件后重试" : "请检查 docs/pr 目录是否存在文件"}
+              />
+            )
+          ) : null}
 
-          {!loading && files.length > 0 ? (
+          {!loading && visibleFiles.length > 0 ? (
             <List disablePadding>
-              {files.map((item) => (
+              {visibleFiles.map((item) => (
                 <ListItemButton
                   key={item.path}
                   onClick={() => onOpenFile(item.path)}
@@ -280,7 +332,8 @@ export function ReviewDrawer({
                     },
                     "&:hover": {
                       bgcolor: selectedPath === item.path ? "rgba(11,114,133,0.12)" : "action.hover"
-                    }
+                    },
+                    transition: "background-color 180ms ease, border-color 180ms ease"
                   }}
                 >
                   <ListItemText
@@ -336,6 +389,11 @@ export function ReviewDrawer({
                         <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                           创建：{formatDateTime(item.createdAt)}
                         </Typography>
+                        {activeTab === "starred" && item.starredAt ? (
+                          <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                            星标：{formatDateTime(item.starredAt)}
+                          </Typography>
+                        ) : null}
                       </>
                     }
                   />
