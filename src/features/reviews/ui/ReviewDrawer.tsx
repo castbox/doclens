@@ -28,6 +28,7 @@ import {
   useMediaQuery
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
+import { shouldReusePrFilesCache, type PrFilesCacheSnapshot } from "@/features/reviews/domain/prFilesCache";
 import type { PrFileReadFilter, PrFileRecord, PrFileStarUpdate } from "@/features/reviews/domain/types";
 import { formatDateTime } from "@/shared/domain/time";
 import { EmptyState, LoadingState } from "@/shared/ui/StateCard";
@@ -43,6 +44,7 @@ type ReviewDrawerTab = "all" | "starred";
 const DRAWER_WIDTH = 360;
 const APP_HEADER_HEIGHT = 64;
 const REFRESH_INTERVAL_MS = 60_000;
+let prFilesCacheSnapshot: PrFilesCacheSnapshot | null = null;
 
 const PrFileListItem = React.memo(function PrFileListItem({
   item,
@@ -168,16 +170,17 @@ export function ReviewDrawer({
 }): React.JSX.Element {
   const theme = useTheme();
   const isLgUp = useMediaQuery(theme.breakpoints.up("lg"));
-  const [allFiles, setAllFiles] = React.useState<PrFileRecord[]>([]);
-  const [categories, setCategories] = React.useState<string[]>([]);
+  const initialCacheSnapshotRef = React.useRef(prFilesCacheSnapshot);
+  const [allFiles, setAllFiles] = React.useState<PrFileRecord[]>(() => initialCacheSnapshotRef.current?.files ?? []);
+  const [categories, setCategories] = React.useState<string[]>(() => initialCacheSnapshotRef.current?.categories ?? []);
   const [activeTab, setActiveTab] = React.useState<ReviewDrawerTab>("all");
   const [categoryFilter, setCategoryFilter] = React.useState("");
   const [readFilter, setReadFilter] = React.useState<PrFileReadFilter>("all");
-  const [loading, setLoading] = React.useState(true);
+  const [loading, setLoading] = React.useState(() => !initialCacheSnapshotRef.current);
   const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState("");
   const [starPendingPath, setStarPendingPath] = React.useState("");
-  const hasLoadedOnceRef = React.useRef(false);
+  const hasLoadedOnceRef = React.useRef(Boolean(initialCacheSnapshotRef.current));
   const listContainerRef = React.useRef<HTMLDivElement | null>(null);
 
   const loadFiles = React.useCallback(async (options?: { silent?: boolean; forceSync?: boolean }) => {
@@ -199,6 +202,11 @@ export function ReviewDrawer({
 
       setAllFiles(payload.files);
       setCategories(payload.categories);
+      prFilesCacheSnapshot = {
+        files: payload.files,
+        categories: payload.categories,
+        loadedAt: Date.now()
+      };
       hasLoadedOnceRef.current = true;
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "加载 PR 文件失败");
@@ -213,6 +221,11 @@ export function ReviewDrawer({
 
   React.useEffect(() => {
     if (!open) {
+      return;
+    }
+
+    if (shouldReusePrFilesCache(prFilesCacheSnapshot, Date.now(), REFRESH_INTERVAL_MS)) {
+      setLoading(false);
       return;
     }
 
@@ -232,6 +245,18 @@ export function ReviewDrawer({
       window.clearInterval(intervalId);
     };
   }, [loadFiles, open]);
+
+  React.useEffect(() => {
+    if (!hasLoadedOnceRef.current) {
+      return;
+    }
+
+    prFilesCacheSnapshot = {
+      files: allFiles,
+      categories,
+      loadedAt: prFilesCacheSnapshot?.loadedAt ?? Date.now()
+    };
+  }, [allFiles, categories]);
 
   const totalStarredCount = React.useMemo(() => allFiles.filter((item) => item.isStarred).length, [allFiles]);
   const hasFilters = categoryFilter !== "" || readFilter !== "all";
