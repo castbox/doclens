@@ -13,3 +13,11 @@ export function shouldReusePrFilesCache(snapshot: PrFilesCacheSnapshot | null, n
 
   return now - snapshot.loadedAt < maxAgeMs;
 }
+
+export function shouldRefreshLatestPrFilesOnSelectionChange(previousSelectedPath: string, nextSelectedPath: string): boolean {
+  if (!nextSelectedPath.startsWith("pr/")) {
+    return false;
+  }
+
+  return previousSelectedPath !== nextSelectedPath;
+}

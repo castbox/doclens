@@ -28,7 +28,11 @@ import {
   useMediaQuery
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
-import { shouldReusePrFilesCache, type PrFilesCacheSnapshot } from "@/features/reviews/domain/prFilesCache";
+import {
+  shouldRefreshLatestPrFilesOnSelectionChange,
+  shouldReusePrFilesCache,
+  type PrFilesCacheSnapshot
+} from "@/features/reviews/domain/prFilesCache";
 import type { PrFileReadFilter, PrFileRecord, PrFileStarUpdate } from "@/features/reviews/domain/types";
 import { formatDateTime } from "@/shared/domain/time";
 import { EmptyState, LoadingState } from "@/shared/ui/StateCard";
@@ -45,6 +49,7 @@ const DRAWER_WIDTH = 360;
 const APP_HEADER_HEIGHT = 64;
 const REFRESH_INTERVAL_MS = 60_000;
 let prFilesCacheSnapshot: PrFilesCacheSnapshot | null = null;
+let lastObservedSelectedPath = "";
 
 const PrFileListItem = React.memo(function PrFileListItem({
   item,
@@ -182,6 +187,7 @@ export function ReviewDrawer({
   const [starPendingPath, setStarPendingPath] = React.useState("");
   const hasLoadedOnceRef = React.useRef(Boolean(initialCacheSnapshotRef.current));
   const listContainerRef = React.useRef<HTMLDivElement | null>(null);
+  const pendingSelectionRefreshRef = React.useRef(false);
 
   const loadFiles = React.useCallback(async (options?: { silent?: boolean; forceSync?: boolean }) => {
     const silent = options?.silent ?? false;
@@ -224,6 +230,12 @@ export function ReviewDrawer({
       return;
     }
 
+    if (pendingSelectionRefreshRef.current && hasLoadedOnceRef.current) {
+      pendingSelectionRefreshRef.current = false;
+      void loadFiles({ silent: true, forceSync: true });
+      return;
+    }
+
     if (shouldReusePrFilesCache(prFilesCacheSnapshot, Date.now(), REFRESH_INTERVAL_MS)) {
       setLoading(false);
       return;
@@ -245,6 +257,23 @@ export function ReviewDrawer({
       window.clearInterval(intervalId);
     };
   }, [loadFiles, open]);
+
+  React.useEffect(() => {
+    const shouldRefreshLatestFiles = shouldRefreshLatestPrFilesOnSelectionChange(lastObservedSelectedPath, selectedPath);
+    lastObservedSelectedPath = selectedPath;
+
+    if (!hasLoadedOnceRef.current || !shouldRefreshLatestFiles) {
+      return;
+    }
+
+    if (!open) {
+      pendingSelectionRefreshRef.current = true;
+      return;
+    }
+
+    pendingSelectionRefreshRef.current = false;
+    void loadFiles({ silent: true, forceSync: true });
+  }, [loadFiles, open, selectedPath]);
 
   React.useEffect(() => {
     if (!hasLoadedOnceRef.current) {
