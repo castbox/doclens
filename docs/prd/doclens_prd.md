@@ -269,7 +269,7 @@
 ### 7.2 必要配置（P0）
 
 ```env
-# 允许访问的文档根目录（只读）
+# 允许访问的文档根目录（只读），可配置为产品仓库根目录或产品仓库 docs 目录
 DOCLENS_DOCS_ROOT=../adsynapse-smart-ads/docs
 
 # SQLite 数据库路径
@@ -282,7 +282,7 @@ DOCLENS_SEARCH_PROVIDER=rg
 DOCLENS_SEARCH_IGNORE=third_parties,node_modules,.git
 ```
 
-> 说明：不建议用 `NEXT_PUBLIC_` 暴露这些路径到浏览器；只在 Server 端读取。
+> 说明：不建议用 `NEXT_PUBLIC_` 暴露这些路径到浏览器；只在 Server 端读取。若 `DOCLENS_DOCS_ROOT` 指向产品仓库根目录且根目录下存在 `docs/`，服务端会自动将文档访问范围收敛到该 `docs/` 子目录；复制路径、导出路径与 `docs/...` URL 别名统一输出/识别为仓库相对路径。
 
 ---
 

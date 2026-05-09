@@ -7,6 +7,7 @@ import { useTheme } from "@mui/material/styles";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { parseLocationAnchor, stripPathAnchor } from "@/features/docs/domain/anchor";
+import { isPrDocsPath } from "@/features/docs/domain/pathAliases";
 import { isPathWithinScope, normalizeDocsRouteState, type DocsNodeType } from "@/features/docs/domain/urlState";
 import type { DocStarUpdate, PathMetaPayload } from "@/features/docs/domain/types";
 import { DocPreview } from "@/features/docs/ui/DocPreview";
@@ -228,7 +229,7 @@ export function DocsWorkspace(): React.JSX.Element {
       isStarred,
       starredAt: isStarred ? starredAt ?? new Date().toISOString() : null
     });
-    if (path.startsWith("pr/")) {
+    if (isPrDocsPath(path)) {
       setLatestPrStarUpdate({
         path,
         isStarred,
@@ -246,7 +247,7 @@ export function DocsWorkspace(): React.JSX.Element {
 
   const handlePreviewLoaded = React.useCallback(async (path: string) => {
     pathTypeCacheRef.current.set(path, "file");
-    if (!path.startsWith("pr/") || latestReadPath.current === path) {
+    if (!isPrDocsPath(path) || latestReadPath.current === path) {
       return;
     }
 

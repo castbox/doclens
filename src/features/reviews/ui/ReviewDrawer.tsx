@@ -33,6 +33,7 @@ import {
   shouldReusePrFilesCache,
   type PrFilesCacheSnapshot
 } from "@/features/reviews/domain/prFilesCache";
+import { isPrDocsPath } from "@/features/docs/domain/pathAliases";
 import type { PrFileReadFilter, PrFileRecord, PrFileStarUpdate } from "@/features/reviews/domain/types";
 import { formatDateTime } from "@/shared/domain/time";
 import { EmptyState, LoadingState } from "@/shared/ui/StateCard";
@@ -333,7 +334,7 @@ export function ReviewDrawer({
   }, [activeTab, categoryFilter, readFilter]);
 
   React.useEffect(() => {
-    if (!selectedPath.startsWith("pr/")) {
+    if (!isPrDocsPath(selectedPath)) {
       return;
     }
 
@@ -351,7 +352,7 @@ export function ReviewDrawer({
   }, [selectedPath]);
 
   React.useEffect(() => {
-    if (!externalStarUpdate || !externalStarUpdate.path.startsWith("pr/")) {
+    if (!externalStarUpdate || !isPrDocsPath(externalStarUpdate.path)) {
       return;
     }
 

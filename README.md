@@ -64,7 +64,7 @@ pnpm install
 在项目根目录创建 `.env`，可直接使用下面模板：
 
 ```env
-# 允许访问的文档根目录（只读）
+# 允许访问的文档根目录（只读），可配置为产品仓库根目录或产品仓库 docs 目录
 DOCLENS_DOCS_ROOT=../adsynapse-smart-ads/docs
 
 # SQLite 数据库路径
@@ -105,7 +105,7 @@ pnpm dev
 
 | 变量名 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `DOCLENS_DOCS_ROOT` | 是 | `./docs` | 文档根目录，只允许只读访问 |
+| `DOCLENS_DOCS_ROOT` | 是 | `./docs` | 文档根目录，只允许只读访问；可指向产品仓库根目录或 `path/to/product_root/docs` |
 | `DOCLENS_DB_PATH` | 是 | `./data/doclens.sqlite` | SQLite 数据库文件路径 |
 | `DOCLENS_SEARCH_PROVIDER` | 否 | `rg` | 搜索实现，当前项目默认 `rg` |
 | `DOCLENS_SEARCH_IGNORE` | 否 | `third_parties,node_modules,.git` | 搜索时忽略的目录 |
@@ -116,6 +116,7 @@ pnpm dev
 
 - 这些变量默认只在服务端读取，不应使用 `NEXT_PUBLIC_` 暴露到浏览器。
 - 即使环境变量被错误配置，服务端仍会对路径做归一化与根目录校验。
+- 当 `DOCLENS_DOCS_ROOT` 指向产品仓库根目录且根目录下存在 `docs/` 时，DocLens 会自动把只读访问范围收敛到该 `docs/` 子目录；复制路径、导出元信息等仍输出仓库相对路径 `docs/...`，避免出现 `docs/docs/...`。
 
 ## 常用命令
 

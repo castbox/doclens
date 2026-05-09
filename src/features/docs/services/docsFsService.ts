@@ -120,7 +120,7 @@ function cachePreview(cacheKey: string, version: string, payload: FilePreviewPay
 }
 
 export async function readFilePreview(inputPath: string, options: ReadFilePreviewOptions = {}): Promise<FilePreviewPayload> {
-  const { absolutePath, relativePath } = resolveDocsPath(inputPath);
+  const { absolutePath, relativePath, repositoryPath } = resolveDocsPath(inputPath);
   const { maxPreviewBytes, maxPreviewLines } = getConfig();
   const stats = await fs.stat(absolutePath);
   const fullContent = options.fullContent === true;
@@ -142,6 +142,7 @@ export async function readFilePreview(inputPath: string, options: ReadFilePrevie
   if (kind === "pdf" || kind === "binary") {
     return cachePreview(cacheKey, version, {
       path: relativePath,
+      repositoryPath,
       name,
       kind,
       size,
@@ -158,6 +159,7 @@ export async function readFilePreview(inputPath: string, options: ReadFilePrevie
   if (fullContent) {
     return cachePreview(cacheKey, version, {
       path: relativePath,
+      repositoryPath,
       name,
       kind,
       size,
@@ -173,6 +175,7 @@ export async function readFilePreview(inputPath: string, options: ReadFilePrevie
     const truncated = truncateByLines(rawContent, maxPreviewLines);
     return cachePreview(cacheKey, version, {
       path: relativePath,
+      repositoryPath,
       name,
       kind,
       size,
@@ -188,6 +191,7 @@ export async function readFilePreview(inputPath: string, options: ReadFilePrevie
 
   return cachePreview(cacheKey, version, {
     path: relativePath,
+    repositoryPath,
     name,
     kind,
     size,
@@ -258,12 +262,13 @@ export async function readFileMeta(inputPath: string): Promise<{ path: string; s
 }
 
 export async function readPathMeta(inputPath: string): Promise<PathMetaPayload> {
-  const { absolutePath, relativePath } = resolveDocsPath(inputPath);
+  const { absolutePath, relativePath, repositoryPath } = resolveDocsPath(inputPath);
   const stats = await fs.stat(absolutePath);
 
   if (stats.isDirectory()) {
     return {
       path: relativePath,
+      repositoryPath,
       nodeType: "directory",
       modifiedAt: stats.mtime.toISOString()
     };
@@ -275,6 +280,7 @@ export async function readPathMeta(inputPath: string): Promise<PathMetaPayload> 
 
   return {
     path: relativePath,
+    repositoryPath,
     nodeType: "file",
     size: stats.size,
     modifiedAt: stats.mtime.toISOString(),

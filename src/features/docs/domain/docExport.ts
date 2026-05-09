@@ -50,7 +50,7 @@ export function buildDocExportFileName(docPath: string, format: DocExportFormat)
 export function buildDocExportModel(payload: FilePreviewPayload, contentHtml: string, exportedAt = new Date()): DocExportModel {
   return {
     title: payload.name,
-    sourcePath: `docs/${payload.path}`,
+    sourcePath: payload.repositoryPath,
     sourceKind: payload.kind,
     sourceSize: formatBytes(payload.size),
     modifiedAt: formatDateTime(payload.modifiedAt),

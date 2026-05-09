@@ -36,6 +36,10 @@ describe("shouldRefreshLatestPrFilesOnSelectionChange", () => {
     expect(shouldRefreshLatestPrFilesOnSelectionChange("pr/2025/foo.md", "pr/2025/bar.md")).toBe(true);
   });
 
+  it("切换到带 docs 前缀的 PR 仓库路径时刷新", () => {
+    expect(shouldRefreshLatestPrFilesOnSelectionChange("pr/2025/foo.md", "docs/pr/2025/bar.md")).toBe(true);
+  });
+
   it("回到同一路径时不重复刷新", () => {
     expect(shouldRefreshLatestPrFilesOnSelectionChange("pr/2025/foo.md", "pr/2025/foo.md")).toBe(false);
   });

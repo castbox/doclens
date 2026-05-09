@@ -176,7 +176,7 @@ export async function exportDocFile(inputPath: string, format: DocExportFormat):
 
   const docx = await HtmlToDocx(html, undefined, {
     title: payload.name,
-    subject: `DocLens 文档详情页导出：docs/${payload.path}`,
+    subject: `DocLens 文档详情页导出：${payload.repositoryPath}`,
     creator: "DocLens",
     lang: "zh-CN",
     table: {

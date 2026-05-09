@@ -1,4 +1,5 @@
 import path from "node:path";
+import { formatRepositoryDocsPath, stripDocsPathPrefix } from "@/features/docs/domain/pathAliases";
 import { getConfig } from "@/shared/utils/env";
 
 export class PathSecurityError extends Error {
@@ -24,11 +25,19 @@ function normalizeInput(inputPath: string): string {
 
   const safePath = path.posix.normalize(normalized);
 
+  if (safePath === ".") {
+    return "";
+  }
+
   if (safePath === ".." || safePath.startsWith("../")) {
     throw new PathSecurityError("Path traversal is not allowed");
   }
 
   return safePath;
+}
+
+export function normalizeDocsInputPath(inputPath = ""): string {
+  return stripDocsPathPrefix(normalizeInput(inputPath));
 }
 
 function ensureWithinRoot(root: string, target: string): void {
@@ -42,9 +51,9 @@ function ensureWithinRoot(root: string, target: string): void {
   }
 }
 
-export function resolveDocsPath(inputPath = ""): { docsRoot: string; relativePath: string; absolutePath: string } {
+export function resolveDocsPath(inputPath = ""): { docsRoot: string; relativePath: string; repositoryPath: string; absolutePath: string } {
   const { docsRoot } = getConfig();
-  const relativePath = normalizeInput(inputPath);
+  const relativePath = normalizeDocsInputPath(inputPath);
   const absolutePath = path.resolve(docsRoot, relativePath);
 
   ensureWithinRoot(docsRoot, absolutePath);
@@ -52,6 +61,7 @@ export function resolveDocsPath(inputPath = ""): { docsRoot: string; relativePat
   return {
     docsRoot,
     relativePath,
+    repositoryPath: formatRepositoryDocsPath(relativePath),
     absolutePath
   };
 }

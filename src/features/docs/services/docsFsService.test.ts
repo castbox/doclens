@@ -58,4 +58,19 @@ describe("readFilePreview", () => {
     expect(preview.markdown?.renderedContent).toContain("[docs/guide/intro.md](docs/guide/intro.md)");
     expect(preview.markdown?.headings.map((item) => item.text)).toEqual(["标题", "二级标题"]);
   });
+
+  it("DOCLENS_DOCS_ROOT 指向项目根目录时仍只预览 docs 子目录并返回仓库相对路径", async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "doclens-project-root-preview-"));
+    const filePath = path.join(tempDir, "docs", "guide", "intro.md");
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, "# Intro\n", "utf8");
+
+    process.env.DOCLENS_DOCS_ROOT = tempDir;
+    clearConfigCache();
+
+    const preview = await readFilePreview("docs/guide/intro.md");
+    expect(preview.path).toBe("guide/intro.md");
+    expect(preview.repositoryPath).toBe("docs/guide/intro.md");
+    expect(preview.content).toContain("# Intro");
+  });
 });

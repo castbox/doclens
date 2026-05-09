@@ -1,4 +1,5 @@
 import type { PrFileRecord } from "@/features/reviews/domain/types";
+import { isPrDocsPath } from "@/features/docs/domain/pathAliases";
 
 export type PrFilesCacheSnapshot = {
   files: PrFileRecord[];
@@ -15,7 +16,7 @@ export function shouldReusePrFilesCache(snapshot: PrFilesCacheSnapshot | null, n
 }
 
 export function shouldRefreshLatestPrFilesOnSelectionChange(previousSelectedPath: string, nextSelectedPath: string): boolean {
-  if (!nextSelectedPath.startsWith("pr/")) {
+  if (!isPrDocsPath(nextSelectedPath)) {
     return false;
   }
 

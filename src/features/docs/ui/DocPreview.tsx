@@ -547,6 +547,8 @@ export function DocPreview({
     return <EmptyState title="请选择文件" description="从左侧目录树选择一个文档开始预览" />;
   }
 
+  const copyPath = data?.repositoryPath ?? "";
+
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25 }}>
       <Box sx={{ p: 0.2 }}>
@@ -601,11 +603,16 @@ export function DocPreview({
                 size="small"
                 aria-label="copy path"
                 sx={{ border: "1px solid", borderColor: "divider", bgcolor: "background.paper" }}
+                disabled={!copyPath}
                 onClick={async () => {
-                  await navigator.clipboard.writeText(`docs/${path}`);
+                  if (!copyPath) {
+                    return;
+                  }
+
+                  await navigator.clipboard.writeText(copyPath);
                   setCopyFeedback({
                     severity: "success",
-                    message: "已复制 docs 路径"
+                    message: "已复制仓库路径"
                   });
                 }}
               >

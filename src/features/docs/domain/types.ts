@@ -10,6 +10,7 @@ export type TreeNode = {
 
 export type FilePreviewPayload = {
   path: string;
+  repositoryPath: string;
   name: string;
   kind: PreviewKind;
   size: number;
@@ -27,6 +28,7 @@ export type FilePreviewPayload = {
 export type PathMetaPayload =
   | {
       path: string;
+      repositoryPath: string;
       nodeType: "file";
       size: number;
       modifiedAt: string;
@@ -34,6 +36,7 @@ export type PathMetaPayload =
     }
   | {
       path: string;
+      repositoryPath: string;
       nodeType: "directory";
       modifiedAt: string;
     };
