@@ -1,5 +1,3 @@
-import { stripDocsPathPrefix } from "@/features/docs/domain/pathAliases";
-
 export type DocsNodeType = "file" | "directory";
 
 export type NormalizeDocsRouteStateInput = {
@@ -15,7 +13,7 @@ export type NormalizeDocsRouteStateResult = {
   changed: boolean;
 };
 
-function normalizeRoutePathBase(input: string | undefined): string {
+function normalizeRoutePath(input: string | undefined): string {
   const trimmed = (input ?? "").trim();
   if (!trimmed) {
     return "";
@@ -27,10 +25,6 @@ function normalizeRoutePathBase(input: string | undefined): string {
   }
 
   return normalized.split("/").filter(Boolean).join("/");
-}
-
-function normalizeRoutePath(input: string | undefined): string {
-  return stripDocsPathPrefix(normalizeRoutePathBase(input));
 }
 
 export function isPathWithinScope(path: string, scopePath: string): boolean {
@@ -48,10 +42,8 @@ export function isPathWithinScope(path: string, scopePath: string): boolean {
 }
 
 export function normalizeDocsRouteState(input: NormalizeDocsRouteStateInput): NormalizeDocsRouteStateResult {
-  const rawScope = normalizeRoutePathBase(input.scopePath);
-  const rawPath = normalizeRoutePathBase(input.path);
-  const initialScope = stripDocsPathPrefix(rawScope);
-  const initialPath = stripDocsPathPrefix(rawPath);
+  const initialScope = normalizeRoutePath(input.scopePath);
+  const initialPath = normalizeRoutePath(input.path);
 
   let scopePath = initialScope;
   let path = initialPath;
@@ -85,6 +77,6 @@ export function normalizeDocsRouteState(input: NormalizeDocsRouteStateInput): No
   return {
     scopePath,
     path,
-    changed: scopePath !== rawScope || path !== rawPath
+    changed: scopePath !== initialScope || path !== initialPath
   };
 }

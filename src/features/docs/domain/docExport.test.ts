@@ -15,6 +15,7 @@ describe("docExport", () => {
     const payload: FilePreviewPayload = {
       path: "prd/doclens_prd.md",
       repositoryPath: "docs/prd/doclens_prd.md",
+      pathPrefix: "docs",
       name: "doclens_prd.md",
       kind: "markdown",
       size: 2048,

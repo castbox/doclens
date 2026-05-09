@@ -10,3 +10,7 @@ export function getCachedSearch(key: string): SearchResult | undefined {
 export function setCachedSearch(key: string, value: SearchResult): void {
   searchCache.set(key, value);
 }
+
+export function resetSearchCacheForTests(): void {
+  searchCache.clear();
+}

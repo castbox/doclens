@@ -55,6 +55,13 @@ describe("markdownPreviewTransform", () => {
     expect(resolveMarkdownDocPath("/prd/doclens_prd.md", currentPath)).toBe("prd/doclens_prd.md");
   });
 
+  it("项目根模式下会保留 docs 前缀仓库路径", () => {
+    const currentPath = ".agents/guide.md";
+
+    expect(resolveMarkdownDocPath("docs/prd/doclens_prd.md", currentPath, { pathPrefix: "" })).toBe("docs/prd/doclens_prd.md");
+    expect(resolveMarkdownDocPath("../README.md", currentPath, { pathPrefix: "" })).toBe("README.md");
+  });
+
   it("会拒绝越界和非 markdown 链接", () => {
     const currentPath = "prd/feature/plan.md";
 

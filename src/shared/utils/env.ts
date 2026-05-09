@@ -4,7 +4,7 @@ import path from "node:path";
 const DEFAULT_DOCS_ROOT = "./docs";
 const DEFAULT_DB_PATH = "./data/doclens.sqlite";
 const DEFAULT_SEARCH_PROVIDER = "rg";
-const DEFAULT_SEARCH_IGNORE = ["third_parties", "node_modules", ".git"];
+const DEFAULT_SEARCH_IGNORE = ["third_parties", "node_modules", ".git", ".next", ".turbo", "dist", "build", "coverage"];
 const DEFAULT_MAX_PREVIEW_BYTES = 2 * 1024 * 1024;
 const DEFAULT_MAX_PREVIEW_LINES = 500;
 
@@ -45,7 +45,7 @@ function resolveDocsRoot(rawDocsRoot: string): Pick<Config, "configuredDocsRoot"
   if (path.basename(configuredDocsRoot) !== "docs" && isDirectory(nestedDocsRoot)) {
     return {
       configuredDocsRoot,
-      docsRoot: nestedDocsRoot,
+      docsRoot: configuredDocsRoot,
       docsRootMode: "project-root"
     };
   }

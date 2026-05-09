@@ -495,6 +495,7 @@ export function DocPreview({
         {data.kind === "markdown" ? (
           <DocMarkdownPreviewBody
             path={path}
+            pathPrefix={data.pathPrefix}
             markdownContent={markdownContent}
             markdownHeadings={markdownHeadings}
             outlineCollapsed={outlineCollapsed}

@@ -131,7 +131,7 @@ async function main() {
     INSERT OR IGNORE INTO doc_states (path, name, is_starred, starred_at, is_read, read_at, updated_at)
     SELECT path, name, 0, NULL, is_read, read_at, COALESCE(read_at, last_seen_at, modified_at, created_at)
     FROM pr_review_files
-    WHERE path LIKE 'pr/%'
+    WHERE path LIKE 'pr/%' OR path LIKE 'docs/pr/%'
   `);
   await db.run(sql`
     UPDATE doc_states
@@ -156,7 +156,7 @@ async function main() {
         )
         ELSE doc_states.updated_at
       END
-    WHERE doc_states.path LIKE 'pr/%' AND EXISTS (SELECT 1 FROM pr_review_files WHERE pr_review_files.path = doc_states.path);
+    WHERE (doc_states.path LIKE 'pr/%' OR doc_states.path LIKE 'docs/pr/%') AND EXISTS (SELECT 1 FROM pr_review_files WHERE pr_review_files.path = doc_states.path);
   `);
 }
 

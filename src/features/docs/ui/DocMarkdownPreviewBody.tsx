@@ -29,12 +29,14 @@ function languageFromCodeClassName(className?: string): string {
 
 export function DocMarkdownPreviewBody({
   path,
+  pathPrefix,
   markdownContent,
   markdownHeadings,
   outlineCollapsed,
   onNavigatePath
 }: {
   path: string;
+  pathPrefix?: string;
   markdownContent: string;
   markdownHeadings: MarkdownHeading[];
   outlineCollapsed: boolean;
@@ -146,7 +148,7 @@ export function DocMarkdownPreviewBody({
                 h5: renderHeading("h5"),
                 h6: renderHeading("h6"),
                 a({ href, children, ...props }) {
-                  const targetPath = resolveMarkdownDocPath(href, path);
+                  const targetPath = resolveMarkdownDocPath(href, path, { pathPrefix });
                   if (targetPath) {
                     const anchorHash = buildAnchorHash(href);
                     const targetHash = anchorHash ? `#${anchorHash}` : "";
@@ -179,8 +181,8 @@ export function DocMarkdownPreviewBody({
                   const inline = !className && !rawValue.includes("\n");
                   const mermaid = isMermaidLanguage(className);
                   const inlineDocsPath = value.trim();
-                  const inlineTargetPath =
-                    inline && inlineDocsPath.startsWith("docs/") ? resolveMarkdownDocPath(inlineDocsPath, path) : null;
+                  const shouldLinkInlinePath = pathPrefix === "" || inlineDocsPath.startsWith(`${pathPrefix ?? "docs"}/`);
+                  const inlineTargetPath = inline && shouldLinkInlinePath ? resolveMarkdownDocPath(inlineDocsPath, path, { pathPrefix }) : null;
 
                   if (mermaid) {
                     return <MermaidCodeBlock code={value} syntaxTheme={codeSyntaxTheme} />;

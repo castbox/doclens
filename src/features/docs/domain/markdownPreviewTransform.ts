@@ -175,7 +175,11 @@ export function normalizeDocsRelativePath(inputPath: string): string | null {
   return segments.join("/");
 }
 
-export function resolveMarkdownDocPath(href: string | undefined, currentPath: string): string | null {
+export function resolveMarkdownDocPath(
+  href: string | undefined,
+  currentPath: string,
+  options: { pathPrefix?: string } = {}
+): string | null {
   if (!href) {
     return null;
   }
@@ -194,8 +198,17 @@ export function resolveMarkdownDocPath(href: string | undefined, currentPath: st
     return null;
   }
 
-  if (pathOnly.startsWith("docs/")) {
-    return normalizeDocsRelativePath(pathOnly.slice("docs/".length));
+  const pathPrefix = options.pathPrefix ?? "docs";
+  if (pathPrefix && pathOnly === pathPrefix) {
+    return normalizeDocsRelativePath("");
+  }
+
+  if (pathPrefix && pathOnly.startsWith(`${pathPrefix}/`)) {
+    return normalizeDocsRelativePath(pathOnly.slice(pathPrefix.length + 1));
+  }
+
+  if (!pathPrefix && /^(docs|\.codex|\.agents)\//.test(pathOnly)) {
+    return normalizeDocsRelativePath(pathOnly);
   }
 
   if (pathOnly.startsWith("/")) {

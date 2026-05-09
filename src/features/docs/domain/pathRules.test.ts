@@ -27,7 +27,7 @@ describe("resolveDocsPath", () => {
     expect(result.absolutePath.endsWith("docs/prd/doclens_prd.md")).toBe(true);
   });
 
-  it("允许 DOCLENS_DOCS_ROOT 指向项目根目录并解析 docs 子目录", async () => {
+  it("允许 DOCLENS_DOCS_ROOT 指向项目根目录并保留仓库相对路径", async () => {
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "doclens-project-root-"));
     await fs.mkdir(path.join(tempDir, "docs", "pr", "20260509"), { recursive: true });
     await fs.writeFile(path.join(tempDir, "docs", "pr", "20260509", "example.md"), "# example\n", "utf8");
@@ -35,8 +35,8 @@ describe("resolveDocsPath", () => {
     clearConfigCache();
 
     const result = resolveDocsPath("docs/pr/20260509/example.md");
-    expect(result.docsRoot).toBe(path.join(tempDir, "docs"));
-    expect(result.relativePath).toBe("pr/20260509/example.md");
+    expect(result.docsRoot).toBe(tempDir);
+    expect(result.relativePath).toBe("docs/pr/20260509/example.md");
     expect(result.repositoryPath).toBe("docs/pr/20260509/example.md");
     expect(result.absolutePath).toBe(path.join(tempDir, "docs", "pr", "20260509", "example.md"));
   });
@@ -59,5 +59,15 @@ describe("resolveDocsPath", () => {
     process.env.DOCLENS_DOCS_ROOT = "./docs";
 
     expect(() => resolveDocsPath("/etc/passwd")).toThrowError(/Absolute path/);
+  });
+
+  it("拒绝默认忽略目录下的直接路径", async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "doclens-ignored-path-"));
+    await fs.mkdir(path.join(tempDir, "docs", ".git"), { recursive: true });
+    await fs.writeFile(path.join(tempDir, "docs", ".git", "ignored.md"), "# ignored\n", "utf8");
+    process.env.DOCLENS_DOCS_ROOT = tempDir;
+    clearConfigCache();
+
+    expect(() => resolveDocsPath(".git/ignored.md")).toThrowError(/Path is ignored/);
   });
 });

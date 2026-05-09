@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isPrDocsPath } from "@/features/docs/domain/pathAliases";
 import { resolveDocsPath } from "@/features/docs/domain/pathRules";
 import { ensurePrFilesWatcherStarted } from "@/features/reviews/services/prFilesSyncService";
 import { ensurePrFileTracked, markPrFileRead } from "@/features/reviews/services/prFilesRepo";
@@ -17,7 +18,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     }
 
     const normalizedPath = resolveDocsPath(payload.path).relativePath;
-    if (!normalizedPath.startsWith("pr/")) {
+    if (!isPrDocsPath(normalizedPath)) {
       return badRequest("path must be in pr directory");
     }
 

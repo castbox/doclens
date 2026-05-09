@@ -278,11 +278,11 @@ DOCLENS_DB_PATH=./data/doclens.sqlite
 # 搜索实现（rg / index）
 DOCLENS_SEARCH_PROVIDER=rg
 
-# 搜索忽略（可选，逗号分隔）
-DOCLENS_SEARCH_IGNORE=third_parties,node_modules,.git
+# 搜索/目录忽略（可选，逗号分隔）
+DOCLENS_SEARCH_IGNORE=third_parties,node_modules,.git,.next,.turbo,dist,build,coverage
 ```
 
-> 说明：不建议用 `NEXT_PUBLIC_` 暴露这些路径到浏览器；只在 Server 端读取。若 `DOCLENS_DOCS_ROOT` 指向产品仓库根目录且根目录下存在 `docs/`，服务端会自动将文档访问范围收敛到该 `docs/` 子目录；复制路径、导出路径与 `docs/...` URL 别名统一输出/识别为仓库相对路径。
+> 说明：不建议用 `NEXT_PUBLIC_` 暴露这些路径到浏览器；只在 Server 端读取。若 `DOCLENS_DOCS_ROOT` 指向产品仓库根目录且根目录下存在 `docs/`，服务端以项目根为只读范围，跟踪仓库内 Markdown 文件，包含 `.codex`、`.agents` 等隐藏文档目录，并通过 `DOCLENS_SEARCH_IGNORE` 排除 `.git`、`node_modules`、`.next` 等目录。若 `DOCLENS_DOCS_ROOT` 直接指向 `path/to/product_root/docs`，复制路径与导出路径会补齐仓库相对前缀 `docs/...`。
 
 ---
 

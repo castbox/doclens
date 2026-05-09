@@ -1,7 +1,16 @@
 const DOCS_PATH_PREFIX = "docs";
 const PR_PATH_PREFIX = "pr";
+type DocsRootMode = "docs-directory" | "project-root";
 
-export function stripDocsPathPrefix(inputPath: string): string {
+function normalizeBasicPath(inputPath: string): string {
+  return inputPath.replace(/\\/g, "/").trim().replace(/^\/+/, "").replace(/\/+$/, "");
+}
+
+export function stripDocsPathPrefix(inputPath: string, mode: DocsRootMode = "docs-directory"): string {
+  if (mode === "project-root") {
+    return inputPath;
+  }
+
   if (inputPath === DOCS_PATH_PREFIX) {
     return "";
   }
@@ -13,8 +22,12 @@ export function stripDocsPathPrefix(inputPath: string): string {
   return inputPath;
 }
 
-export function formatRepositoryDocsPath(inputPath: string): string {
-  const normalized = stripDocsPathPrefix(inputPath.replace(/\\/g, "/").trim()).replace(/^\/+/, "").replace(/\/+$/, "");
+export function formatRepositoryDocsPath(inputPath: string, mode: DocsRootMode = "docs-directory"): string {
+  const normalized = stripDocsPathPrefix(normalizeBasicPath(inputPath), mode);
+  if (mode === "project-root") {
+    return normalized || ".";
+  }
+
   if (!normalized) {
     return DOCS_PATH_PREFIX;
   }
@@ -23,6 +36,15 @@ export function formatRepositoryDocsPath(inputPath: string): string {
 }
 
 export function isPrDocsPath(inputPath: string): boolean {
-  const normalized = stripDocsPathPrefix(inputPath.replace(/\\/g, "/").trim()).replace(/^\/+/, "").replace(/\/+$/, "");
-  return normalized === PR_PATH_PREFIX || normalized.startsWith(`${PR_PATH_PREFIX}/`);
+  const normalized = normalizeBasicPath(inputPath);
+  return (
+    normalized === PR_PATH_PREFIX ||
+    normalized.startsWith(`${PR_PATH_PREFIX}/`) ||
+    normalized === `${DOCS_PATH_PREFIX}/${PR_PATH_PREFIX}` ||
+    normalized.startsWith(`${DOCS_PATH_PREFIX}/${PR_PATH_PREFIX}/`)
+  );
+}
+
+export function getPrDocsPathPrefix(mode: DocsRootMode): string {
+  return mode === "project-root" ? `${DOCS_PATH_PREFIX}/${PR_PATH_PREFIX}` : PR_PATH_PREFIX;
 }

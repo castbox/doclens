@@ -20,6 +20,10 @@ const DOCS_DRAWER_WIDTH = 320;
 const REVIEW_DRAWER_WIDTH = 360;
 const APP_HEADER_HEIGHT = 64;
 type DocsDrawerTab = "tree" | "starred";
+type ResolvedPathMeta = {
+  path: string;
+  nodeType: DocsNodeType;
+};
 
 export function DocsWorkspace(): React.JSX.Element {
   const theme = useTheme();
@@ -42,10 +46,10 @@ export function DocsWorkspace(): React.JSX.Element {
   const [docStarRefreshToken, setDocStarRefreshToken] = React.useState(0);
   const [latestDocStarUpdate, setLatestDocStarUpdate] = React.useState<DocStarUpdate | null>(null);
   const [latestPrStarUpdate, setLatestPrStarUpdate] = React.useState<PrFileStarUpdate | null>(null);
-  const pathTypeCacheRef = React.useRef<Map<string, DocsNodeType>>(new Map());
+  const pathTypeCacheRef = React.useRef<Map<string, ResolvedPathMeta>>(new Map());
   const latestReadPath = React.useRef("");
 
-  const getPathNodeType = React.useCallback(async (path: string, signal: AbortSignal): Promise<DocsNodeType | null> => {
+  const getPathMeta = React.useCallback(async (path: string, signal: AbortSignal): Promise<ResolvedPathMeta | null> => {
     const cached = pathTypeCacheRef.current.get(path);
     if (cached) {
       return cached;
@@ -62,8 +66,16 @@ export function DocsWorkspace(): React.JSX.Element {
     }
 
     const payload = (await response.json()) as PathMetaPayload;
-    pathTypeCacheRef.current.set(path, payload.nodeType);
-    return payload.nodeType;
+    const resolved = {
+      path: payload.path,
+      nodeType: payload.nodeType
+    };
+    pathTypeCacheRef.current.set(path, resolved);
+    pathTypeCacheRef.current.set(payload.path, resolved);
+    return {
+      path: payload.path,
+      nodeType: payload.nodeType
+    };
   }, []);
 
   React.useEffect(() => {
@@ -71,7 +83,7 @@ export function DocsWorkspace(): React.JSX.Element {
       setSelectedPath("");
     }
 
-    const cachedPathNodeType = pathParam ? pathTypeCacheRef.current.get(pathParam) : undefined;
+    const cachedPathNodeType = pathParam ? pathTypeCacheRef.current.get(pathParam)?.nodeType : undefined;
     const canUseOptimisticPath =
       Boolean(pathParam) &&
       cachedPathNodeType === "file" &&
@@ -89,26 +101,32 @@ export function DocsWorkspace(): React.JSX.Element {
     const resolveRouteParams = async () => {
       let scopeNodeType: DocsNodeType | null | undefined;
       let pathNodeType: DocsNodeType | null | undefined;
+      let resolvedScopeParam = scopeParam;
+      let resolvedPathParam = pathParam;
 
       if (scopeParam) {
         try {
-          scopeNodeType = await getPathNodeType(scopeParam, controller.signal);
+          const scopeMeta = await getPathMeta(scopeParam, controller.signal);
+          scopeNodeType = scopeMeta?.nodeType ?? null;
+          resolvedScopeParam = scopeMeta?.path ?? "";
         } catch {
           scopeNodeType = undefined;
         }
       }
 
-      if (pathParam && (!scopeParam || pathParam === scopeParam)) {
+      if (pathParam) {
         try {
-          pathNodeType = await getPathNodeType(pathParam, controller.signal);
+          const pathMeta = await getPathMeta(pathParam, controller.signal);
+          pathNodeType = pathMeta?.nodeType ?? null;
+          resolvedPathParam = pathMeta?.path ?? "";
         } catch {
           pathNodeType = undefined;
         }
       }
 
       const normalized = normalizeDocsRouteState({
-        scopePath: scopeParam,
-        path: pathParam,
+        scopePath: resolvedScopeParam,
+        path: resolvedPathParam,
         scopeNodeType,
         pathNodeType
       });
@@ -146,7 +164,7 @@ export function DocsWorkspace(): React.JSX.Element {
       cancelled = true;
       controller.abort();
     };
-  }, [getPathNodeType, pathParam, router, scopeParam, searchParamsString]);
+  }, [getPathMeta, pathParam, router, scopeParam, searchParamsString]);
 
   React.useEffect(() => {
     const hashIndex = rawPathParam.indexOf("#");
@@ -202,7 +220,7 @@ export function DocsWorkspace(): React.JSX.Element {
       }
 
       if (safePath) {
-        pathTypeCacheRef.current.set(safePath, "file");
+        pathTypeCacheRef.current.set(safePath, { path: safePath, nodeType: "file" });
         params.set("path", safePath);
       } else {
         params.delete("path");
@@ -246,7 +264,7 @@ export function DocsWorkspace(): React.JSX.Element {
   );
 
   const handlePreviewLoaded = React.useCallback(async (path: string) => {
-    pathTypeCacheRef.current.set(path, "file");
+    pathTypeCacheRef.current.set(path, { path, nodeType: "file" });
     if (!isPrDocsPath(path) || latestReadPath.current === path) {
       return;
     }

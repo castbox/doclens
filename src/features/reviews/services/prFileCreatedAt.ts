@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import matter from "gray-matter";
+import { getPrDocsPathPrefix, isPrDocsPath } from "@/features/docs/domain/pathAliases";
 import { LRUCache } from "@/shared/domain/lru";
 import { getConfig } from "@/shared/utils/env";
 
@@ -14,6 +15,11 @@ const gitCreatedAtByHeadCache = new Map<string, Promise<Map<string, Date> | null
 const gitFollowCreatedAtCache = new LRUCache<string, Date>(2048);
 
 type FileStats = Awaited<ReturnType<typeof fs.stat>>;
+
+function isMarkdownPath(inputPath: string): boolean {
+  const lower = inputPath.toLowerCase();
+  return lower.endsWith(".md") || lower.endsWith(".markdown");
+}
 
 function buildFrontmatterCacheKey(absolutePath: string, stats: FileStats): string {
   return `${absolutePath}:${stats.mtimeMs}:${stats.size}`;
@@ -68,7 +74,7 @@ async function readFrontmatterProbe(absolutePath: string, size: number): Promise
 }
 
 async function readFrontmatterCreatedAt(absolutePath: string, stats: FileStats): Promise<Date | null> {
-  if (path.extname(absolutePath).toLowerCase() !== ".md") {
+  if (!isMarkdownPath(absolutePath)) {
     return null;
   }
 
@@ -144,8 +150,8 @@ async function resolveGitHead(docsRoot: string): Promise<string | null> {
   }
 }
 
-async function buildGitCreatedAtIndex(docsRoot: string, head: string): Promise<Map<string, Date> | null> {
-  const cacheKey = `${docsRoot}:${head}`;
+async function buildGitCreatedAtIndex(docsRoot: string, head: string, prRootRelativePath: string): Promise<Map<string, Date> | null> {
+  const cacheKey = `${docsRoot}:${head}:${prRootRelativePath}`;
   const cached = gitCreatedAtByHeadCache.get(cacheKey);
   if (cached) {
     return cached;
@@ -155,7 +161,7 @@ async function buildGitCreatedAtIndex(docsRoot: string, head: string): Promise<M
     try {
       const { stdout } = await execFileAsync(
         "git",
-        ["-C", docsRoot, "log", "--reverse", "--diff-filter=A", `--format=${GIT_BATCH_MARKER}%cI`, "--name-only", "--relative", "--", "pr"],
+        ["-C", docsRoot, "log", "--reverse", "--diff-filter=A", `--format=${GIT_BATCH_MARKER}%cI`, "--name-only", "--relative", "--", prRootRelativePath],
         {
           timeout: 20000,
           maxBuffer: 16 * 1024 * 1024
@@ -176,7 +182,7 @@ async function buildGitCreatedAtIndex(docsRoot: string, head: string): Promise<M
           continue;
         }
 
-        if (!activeDate || !line.startsWith("pr/") || path.posix.extname(line).toLowerCase() !== ".md") {
+        if (!activeDate || !line.startsWith(`${prRootRelativePath}/`) || !isMarkdownPath(line)) {
           continue;
         }
 
@@ -227,17 +233,18 @@ async function readGitCreatedAtWithFollow(docsRoot: string, head: string, relati
 }
 
 async function readGitCreatedAt(relativePath: string): Promise<Date | null> {
-  if (!relativePath.startsWith("pr/") || path.posix.extname(relativePath).toLowerCase() !== ".md") {
+  if (!isPrDocsPath(relativePath) || !isMarkdownPath(relativePath)) {
     return null;
   }
 
-  const { docsRoot } = getConfig();
+  const { docsRoot, docsRootMode } = getConfig();
+  const prRootRelativePath = getPrDocsPathPrefix(docsRootMode);
   const head = await resolveGitHead(docsRoot);
   if (!head) {
     return null;
   }
 
-  const index = await buildGitCreatedAtIndex(docsRoot, head);
+  const index = await buildGitCreatedAtIndex(docsRoot, head, prRootRelativePath);
   const indexedCreatedAt = index?.get(relativePath);
   if (indexedCreatedAt) {
     return indexedCreatedAt;

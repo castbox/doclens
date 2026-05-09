@@ -73,8 +73,8 @@ DOCLENS_DB_PATH=./data/doclens.sqlite
 # 搜索实现：当前默认 rg
 DOCLENS_SEARCH_PROVIDER=rg
 
-# 搜索忽略目录（逗号分隔）
-DOCLENS_SEARCH_IGNORE=third_parties,node_modules,.git
+# 搜索/目录忽略目录（逗号分隔）
+DOCLENS_SEARCH_IGNORE=third_parties,node_modules,.git,.next,.turbo,dist,build,coverage
 
 # 单文件预览大小上限（字节）
 DOCLENS_MAX_FILE_PREVIEW_BYTES=2097152
@@ -108,7 +108,7 @@ pnpm dev
 | `DOCLENS_DOCS_ROOT` | 是 | `./docs` | 文档根目录，只允许只读访问；可指向产品仓库根目录或 `path/to/product_root/docs` |
 | `DOCLENS_DB_PATH` | 是 | `./data/doclens.sqlite` | SQLite 数据库文件路径 |
 | `DOCLENS_SEARCH_PROVIDER` | 否 | `rg` | 搜索实现，当前项目默认 `rg` |
-| `DOCLENS_SEARCH_IGNORE` | 否 | `third_parties,node_modules,.git` | 搜索时忽略的目录 |
+| `DOCLENS_SEARCH_IGNORE` | 否 | `third_parties,node_modules,.git,.next,.turbo,dist,build,coverage` | 搜索与目录树忽略的目录 |
 | `DOCLENS_MAX_FILE_PREVIEW_BYTES` | 否 | `2097152` | 单文件预览字节上限，超出后走截断策略 |
 | `DOCLENS_MAX_FILE_PREVIEW_LINES` | 否 | `500` | 单文件预览最大行数 |
 
@@ -116,7 +116,8 @@ pnpm dev
 
 - 这些变量默认只在服务端读取，不应使用 `NEXT_PUBLIC_` 暴露到浏览器。
 - 即使环境变量被错误配置，服务端仍会对路径做归一化与根目录校验。
-- 当 `DOCLENS_DOCS_ROOT` 指向产品仓库根目录且根目录下存在 `docs/` 时，DocLens 会自动把只读访问范围收敛到该 `docs/` 子目录；复制路径、导出元信息等仍输出仓库相对路径 `docs/...`，避免出现 `docs/docs/...`。
+- 当 `DOCLENS_DOCS_ROOT` 指向产品仓库根目录且根目录下存在 `docs/` 时，DocLens 会以项目根为只读范围，跟踪仓库内 Markdown 文件；`.codex`、`.agents` 等隐藏文档目录可见，`.git`、`node_modules`、`.next` 等由 `DOCLENS_SEARCH_IGNORE` 排除。
+- 当 `DOCLENS_DOCS_ROOT` 直接指向 `path/to/product_root/docs` 时，内部路径仍是 docs 内相对路径；复制路径、导出元信息会补齐仓库相对前缀 `docs/...`。
 
 ## 常用命令
 

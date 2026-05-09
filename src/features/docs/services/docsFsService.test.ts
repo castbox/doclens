@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { clearConfigCache } from "@/shared/utils/env";
-import { readFilePreview } from "./docsFsService";
+import { listTreeNodes, readFilePreview } from "./docsFsService";
 
 describe("readFilePreview", () => {
   let tempDir: string | null = null;
@@ -59,7 +59,7 @@ describe("readFilePreview", () => {
     expect(preview.markdown?.headings.map((item) => item.text)).toEqual(["标题", "二级标题"]);
   });
 
-  it("DOCLENS_DOCS_ROOT 指向项目根目录时仍只预览 docs 子目录并返回仓库相对路径", async () => {
+  it("DOCLENS_DOCS_ROOT 指向项目根目录时按仓库相对路径预览 markdown", async () => {
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "doclens-project-root-preview-"));
     const filePath = path.join(tempDir, "docs", "guide", "intro.md");
     await fs.mkdir(path.dirname(filePath), { recursive: true });
@@ -69,8 +69,31 @@ describe("readFilePreview", () => {
     clearConfigCache();
 
     const preview = await readFilePreview("docs/guide/intro.md");
-    expect(preview.path).toBe("guide/intro.md");
+    expect(preview.path).toBe("docs/guide/intro.md");
     expect(preview.repositoryPath).toBe("docs/guide/intro.md");
     expect(preview.content).toContain("# Intro");
+  });
+
+  it("项目根目录模式会展示隐藏文档目录并排除默认忽略目录和非 Markdown 文件", async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "doclens-project-root-tree-"));
+    await fs.mkdir(path.join(tempDir, "docs"), { recursive: true });
+    await fs.mkdir(path.join(tempDir, ".codex"), { recursive: true });
+    await fs.mkdir(path.join(tempDir, ".agents"), { recursive: true });
+    await fs.mkdir(path.join(tempDir, ".git"), { recursive: true });
+    await fs.writeFile(path.join(tempDir, "README.md"), "# Readme\n", "utf8");
+    await fs.writeFile(path.join(tempDir, "package.json"), "{}\n", "utf8");
+    await fs.writeFile(path.join(tempDir, ".codex", "notes.md"), "# Notes\n", "utf8");
+    await fs.writeFile(path.join(tempDir, ".agents", "guide.md"), "# Guide\n", "utf8");
+    await fs.writeFile(path.join(tempDir, ".git", "ignored.md"), "# ignored\n", "utf8");
+
+    process.env.DOCLENS_DOCS_ROOT = tempDir;
+    clearConfigCache();
+
+    const rootNodes = await listTreeNodes("");
+    expect(rootNodes.map((node) => node.path)).toContain("README.md");
+    expect(rootNodes.map((node) => node.path)).toContain(".codex");
+    expect(rootNodes.map((node) => node.path)).toContain(".agents");
+    expect(rootNodes.map((node) => node.path)).not.toContain(".git");
+    expect(rootNodes.map((node) => node.path)).not.toContain("package.json");
   });
 });

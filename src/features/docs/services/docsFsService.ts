@@ -22,11 +22,23 @@ const docsPreviewCache = new LRUCache<string, PreviewCacheEntry>(120);
 
 function shouldIgnoreName(name: string): boolean {
   const { searchIgnore } = getConfig();
-  if (name.startsWith(".")) {
-    return true;
-  }
-
   return searchIgnore.includes(name);
+}
+
+function isMarkdownFileName(fileName: string): boolean {
+  const lower = fileName.toLowerCase();
+  return lower.endsWith(".md") || lower.endsWith(".markdown");
+}
+
+function isTrackableFileName(fileName: string): boolean {
+  const { docsRootMode } = getConfig();
+  return docsRootMode === "project-root" ? isMarkdownFileName(fileName) : true;
+}
+
+function assertTrackableFile(fileName: string): void {
+  if (!isTrackableFileName(fileName)) {
+    throw new Error("Project root mode only tracks markdown files");
+  }
 }
 
 function toPosixPath(inputPath: string): string {
@@ -46,13 +58,14 @@ export async function listTreeNodes(inputPath = ""): Promise<TreeNode[]> {
   const nodes = await Promise.all(
     entries
       .filter((entry) => !shouldIgnoreName(entry.name))
+      .filter((entry) => entry.isDirectory() || isTrackableFileName(entry.name))
       .map(async (entry) => {
         const nodePath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
 
         if (entry.isDirectory()) {
           const fullPath = path.resolve(absolutePath, entry.name);
           const children = await fs.readdir(fullPath, { withFileTypes: true });
-          const hasChildren = children.some((child) => !shouldIgnoreName(child.name));
+          const hasChildren = children.some((child) => !shouldIgnoreName(child.name) && (child.isDirectory() || isTrackableFileName(child.name)));
           return {
             name: entry.name,
             path: toPosixPath(nodePath),
@@ -121,7 +134,7 @@ function cachePreview(cacheKey: string, version: string, payload: FilePreviewPay
 
 export async function readFilePreview(inputPath: string, options: ReadFilePreviewOptions = {}): Promise<FilePreviewPayload> {
   const { absolutePath, relativePath, repositoryPath } = resolveDocsPath(inputPath);
-  const { maxPreviewBytes, maxPreviewLines } = getConfig();
+  const { docsRootMode, maxPreviewBytes, maxPreviewLines } = getConfig();
   const stats = await fs.stat(absolutePath);
   const fullContent = options.fullContent === true;
 
@@ -130,6 +143,7 @@ export async function readFilePreview(inputPath: string, options: ReadFilePrevie
   }
 
   const name = path.basename(absolutePath);
+  assertTrackableFile(name);
   const kind = detectPreviewKind(name);
   const size = stats.size;
   const cacheKey = buildPreviewCacheKey(absolutePath, fullContent);
@@ -143,6 +157,7 @@ export async function readFilePreview(inputPath: string, options: ReadFilePrevie
     return cachePreview(cacheKey, version, {
       path: relativePath,
       repositoryPath,
+      pathPrefix: docsRootMode === "docs-directory" ? "docs" : "",
       name,
       kind,
       size,
@@ -160,6 +175,7 @@ export async function readFilePreview(inputPath: string, options: ReadFilePrevie
     return cachePreview(cacheKey, version, {
       path: relativePath,
       repositoryPath,
+      pathPrefix: docsRootMode === "docs-directory" ? "docs" : "",
       name,
       kind,
       size,
@@ -176,6 +192,7 @@ export async function readFilePreview(inputPath: string, options: ReadFilePrevie
     return cachePreview(cacheKey, version, {
       path: relativePath,
       repositoryPath,
+      pathPrefix: docsRootMode === "docs-directory" ? "docs" : "",
       name,
       kind,
       size,
@@ -192,6 +209,7 @@ export async function readFilePreview(inputPath: string, options: ReadFilePrevie
   return cachePreview(cacheKey, version, {
     path: relativePath,
     repositoryPath,
+    pathPrefix: docsRootMode === "docs-directory" ? "docs" : "",
     name,
     kind,
     size,
@@ -212,6 +230,7 @@ export async function readRawFile(inputPath: string): Promise<{ stream: Readable
   }
 
   const fileName = path.basename(absolutePath);
+  assertTrackableFile(fileName);
   const kind = detectPreviewKind(fileName);
   const contentType =
     kind === "pdf"
@@ -253,6 +272,7 @@ export async function readFileMeta(inputPath: string): Promise<{ path: string; s
     throw new Error("Path is not a file");
   }
 
+  assertTrackableFile(path.basename(absolutePath));
   return {
     path: relativePath,
     size: stats.size,
@@ -278,6 +298,7 @@ export async function readPathMeta(inputPath: string): Promise<PathMetaPayload> 
     throw new Error("Path is not a file or directory");
   }
 
+  assertTrackableFile(path.basename(absolutePath));
   return {
     path: relativePath,
     repositoryPath,

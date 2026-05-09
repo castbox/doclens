@@ -150,6 +150,32 @@ describe("prFilesRepo 状态持久化", () => {
     expect(rows[0]?.createdAt).toBe(gitCreatedAt);
   });
 
+  it("项目根目录模式会从 docs/pr 识别 PR 文件路径", async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "doclens-pr-project-root-"));
+    const projectRoot = tempDir;
+    const dbPath = path.join(tempDir, "data", "doclens.sqlite");
+    const relativePath = "docs/pr/20260317/perf/project-root.md";
+    const absolutePath = path.join(projectRoot, "docs", "pr", "20260317", "perf", "project-root.md");
+
+    await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+    await fs.writeFile(absolutePath, "# project root pr\n", "utf8");
+
+    process.env.DOCLENS_DOCS_ROOT = projectRoot;
+    process.env.DOCLENS_DB_PATH = dbPath;
+    clearConfigCache();
+    resetDbClientForTests();
+    resetDocStatesRepoForTests();
+    resetPrFilesRepoForTests();
+    resetPrFileCreatedAtCachesForTests();
+
+    await syncPrFilesSnapshot();
+    const rows = await listPrFiles();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.path).toBe(relativePath);
+    expect(rows[0]?.dateFolder).toBe("20260317");
+    expect(rows[0]?.category).toBe("perf");
+  });
+
   it("创建时间在没有 frontmatter 和 Git 历史时回退到文件名日期", async () => {
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "doclens-pr-created-filename-"));
     const docsRoot = tempDir;

@@ -28,4 +28,8 @@ export class LRUCache<K, V> {
       }
     }
   }
+
+  clear(): void {
+    this.map.clear();
+  }
 }

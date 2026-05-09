@@ -11,6 +11,7 @@ export type TreeNode = {
 export type FilePreviewPayload = {
   path: string;
   repositoryPath: string;
+  pathPrefix: string;
   name: string;
   kind: PreviewKind;
   size: number;

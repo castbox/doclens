@@ -4,6 +4,7 @@ import { and, desc, eq, inArray, like, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { docStates, prReviewFiles } from "@/db/schema";
 import type { PrFileReadFilter, PrFileRecord } from "@/features/reviews/domain/types";
+import { getPrDocsPathPrefix, isPrDocsPath } from "@/features/docs/domain/pathAliases";
 import { resolveDocsPath } from "@/features/docs/domain/pathRules";
 import { ensureDocStatesSchema, setDocReadState } from "@/features/docs/services/docStatesRepo";
 import { getConfig } from "@/shared/utils/env";
@@ -47,24 +48,41 @@ function toIso(value: Date | string | number | null): string | null {
 
 function shouldIgnoreName(name: string): boolean {
   const { searchIgnore } = getConfig();
-  if (name.startsWith(".")) {
-    return true;
-  }
-
   return searchIgnore.includes(name);
+}
+
+function getPrRootRelativePath(): string {
+  return getPrDocsPathPrefix(getConfig().docsRootMode);
+}
+
+function getPrPathLikePattern(): string {
+  return `${getPrRootRelativePath()}/%`;
 }
 
 function toPosixPath(inputPath: string): string {
   return inputPath.split(path.sep).join(path.posix.sep);
 }
 
+function isMarkdownFilePath(inputPath: string): boolean {
+  const lower = inputPath.toLowerCase();
+  return lower.endsWith(".md") || lower.endsWith(".markdown");
+}
+
 function extractDateFolder(relativePath: string): string {
   const segments = relativePath.split("/");
+  if (relativePath.startsWith("docs/pr/")) {
+    return segments.length >= 4 ? segments[2] : "unknown";
+  }
+
   return segments.length >= 3 ? segments[1] : "unknown";
 }
 
 function extractCategory(relativePath: string): string {
   const segments = relativePath.split("/");
+  if (relativePath.startsWith("docs/pr/")) {
+    return segments.length >= 5 ? segments[3] : "uncategorized";
+  }
+
   return segments.length >= 4 ? segments[2] : "uncategorized";
 }
 
@@ -131,7 +149,7 @@ async function listPrFileRows(filter?: { category?: string; readFilter?: PrFileR
   await ensurePrFilesSchema();
   await ensureDocStatesSchema();
   const db = getDb();
-  const conditions = [like(prReviewFiles.path, "pr/%")];
+  const conditions = [like(prReviewFiles.path, getPrPathLikePattern())];
 
   if (filter?.category) {
     conditions.push(eq(prReviewFiles.category, filter.category));
@@ -183,7 +201,7 @@ async function hasTrackedPrFile(inputPath: string): Promise<boolean> {
 async function listTrackedPrFilePaths(): Promise<string[]> {
   await ensurePrFilesSchema();
   const db = getDb();
-  const rows = await db.select({ path: prReviewFiles.path }).from(prReviewFiles).where(like(prReviewFiles.path, "pr/%"));
+  const rows = await db.select({ path: prReviewFiles.path }).from(prReviewFiles).where(like(prReviewFiles.path, getPrPathLikePattern()));
   return rows.map((row) => row.path);
 }
 
@@ -259,12 +277,16 @@ async function walkPrFilePaths(absoluteDir: string, relativeDir: string, paths: 
       continue;
     }
 
-    paths.push(`pr/${toPosixPath(childRelative)}`);
+    if (!isMarkdownFilePath(toPosixPath(childRelative))) {
+      continue;
+    }
+
+    paths.push(`${getPrRootRelativePath()}/${toPosixPath(childRelative)}`);
   }
 }
 
 async function collectPrFilePaths(): Promise<string[]> {
-  const { absolutePath } = resolveDocsPath("pr");
+  const { absolutePath } = resolveDocsPath(getPrRootRelativePath());
   let stats: Awaited<ReturnType<typeof fs.stat>>;
 
   try {
@@ -302,7 +324,7 @@ async function deletePrFilesByPaths(paths: string[]): Promise<void> {
   await ensurePrFilesSchema();
   const db = getDb();
   for (const chunk of chunkPaths(paths)) {
-    await db.delete(prReviewFiles).where(and(like(prReviewFiles.path, "pr/%"), inArray(prReviewFiles.path, chunk)));
+    await db.delete(prReviewFiles).where(and(like(prReviewFiles.path, getPrPathLikePattern()), inArray(prReviewFiles.path, chunk)));
   }
 }
 
@@ -343,14 +365,14 @@ export async function syncPrFilesSnapshot(): Promise<void> {
 export async function hasPrFilesSnapshot(): Promise<boolean> {
   await ensurePrFilesSchema();
   const db = getDb();
-  const [row] = await db.select({ path: prReviewFiles.path }).from(prReviewFiles).where(like(prReviewFiles.path, "pr/%")).limit(1);
+  const [row] = await db.select({ path: prReviewFiles.path }).from(prReviewFiles).where(like(prReviewFiles.path, getPrPathLikePattern())).limit(1);
   return Boolean(row?.path);
 }
 
 export async function ensurePrFileTracked(inputPath: string): Promise<void> {
   await ensurePrFilesSchema();
   const normalizedPath = resolveDocsPath(inputPath).relativePath;
-  if (!normalizedPath.startsWith("pr/")) {
+  if (!isPrDocsPath(normalizedPath)) {
     return;
   }
 
@@ -377,7 +399,7 @@ export async function listPrCategories(): Promise<string[]> {
   const rows = await db
     .select({ category: prReviewFiles.category })
     .from(prReviewFiles)
-    .where(like(prReviewFiles.path, "pr/%"))
+    .where(like(prReviewFiles.path, getPrPathLikePattern()))
     .groupBy(prReviewFiles.category);
   return Array.from(new Set(rows.map((row) => row.category))).sort((a, b) => a.localeCompare(b, "zh-CN"));
 }

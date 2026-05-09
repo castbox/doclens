@@ -25,16 +25,17 @@ function buildCacheKey(request: Required<Omit<SearchRequest, "scope">> & { scope
 }
 
 function buildRgArgs(term: string, request: { scope: string; type: string }): string[] {
-  const { searchIgnore } = getConfig();
+  const { docsRootMode, searchIgnore } = getConfig();
   const args = ["--json", "--line-number", "--column", "--smart-case", "--hidden"];
 
-  for (const ignored of searchIgnore) {
-    args.push("--glob", `!**/${ignored}/**`);
-  }
-
-  const globs = buildTypeGlobs(sanitizeFileType(request.type));
+  const globs = buildTypeGlobs(docsRootMode === "project-root" ? "md" : sanitizeFileType(request.type));
   for (const glob of globs) {
     args.push("--glob", glob);
+  }
+
+  for (const ignored of searchIgnore) {
+    args.push("--glob", `!${ignored}/**`);
+    args.push("--glob", `!**/${ignored}/**`);
   }
 
   args.push(term);

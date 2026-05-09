@@ -37,7 +37,8 @@ function normalizeInput(inputPath: string): string {
 }
 
 export function normalizeDocsInputPath(inputPath = ""): string {
-  return stripDocsPathPrefix(normalizeInput(inputPath));
+  const { docsRootMode } = getConfig();
+  return stripDocsPathPrefix(normalizeInput(inputPath), docsRootMode);
 }
 
 function ensureWithinRoot(root: string, target: string): void {
@@ -51,17 +52,30 @@ function ensureWithinRoot(root: string, target: string): void {
   }
 }
 
+function ensureNotIgnored(relativePath: string, ignoredNames: string[]): void {
+  if (!relativePath) {
+    return;
+  }
+
+  const ignored = new Set(ignoredNames);
+  const blockedSegment = relativePath.split("/").find((segment) => ignored.has(segment));
+  if (blockedSegment) {
+    throw new PathSecurityError(`Path is ignored: ${blockedSegment}`);
+  }
+}
+
 export function resolveDocsPath(inputPath = ""): { docsRoot: string; relativePath: string; repositoryPath: string; absolutePath: string } {
-  const { docsRoot } = getConfig();
+  const { docsRoot, docsRootMode, searchIgnore } = getConfig();
   const relativePath = normalizeDocsInputPath(inputPath);
   const absolutePath = path.resolve(docsRoot, relativePath);
 
   ensureWithinRoot(docsRoot, absolutePath);
+  ensureNotIgnored(relativePath, searchIgnore);
 
   return {
     docsRoot,
     relativePath,
-    repositoryPath: formatRepositoryDocsPath(relativePath),
+    repositoryPath: formatRepositoryDocsPath(relativePath, docsRootMode),
     absolutePath
   };
 }

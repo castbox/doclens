@@ -10,8 +10,8 @@ describe("isPathWithinScope", () => {
     expect(isPathWithinScope("pr/20260212/other/a.md", "pr/20260212/asset-library")).toBe(false);
   });
 
-  it("会把 docs 前缀作为仓库路径别名归一化", () => {
-    expect(isPathWithinScope("docs/pr/20260212/asset-library/a.md", "pr/20260212/asset-library")).toBe(true);
+  it("项目根路径会按仓库相对路径判断 scope", () => {
+    expect(isPathWithinScope("docs/pr/20260212/asset-library/a.md", "docs/pr/20260212/asset-library")).toBe(true);
   });
 });
 
@@ -62,7 +62,7 @@ describe("normalizeDocsRouteState", () => {
     expect(result.changed).toBe(false);
   });
 
-  it("会把 URL 中的 docs 前缀归一化为 docs 内相对路径", () => {
+  it("保留项目根模式下的 docs 前缀仓库路径", () => {
     const result = normalizeDocsRouteState({
       scopePath: "docs/pr/20260212/asset-library",
       path: "docs/pr/20260212/asset-library/readme.md",
@@ -70,20 +70,9 @@ describe("normalizeDocsRouteState", () => {
       pathNodeType: "file"
     });
 
-    expect(result.scopePath).toBe("pr/20260212/asset-library");
-    expect(result.path).toBe("pr/20260212/asset-library/readme.md");
-    expect(result.changed).toBe(true);
-  });
-
-  it("docs 根路径会归一化为空路径", () => {
-    const result = normalizeDocsRouteState({
-      path: "docs",
-      pathNodeType: "directory"
-    });
-
-    expect(result.scopePath).toBe("");
-    expect(result.path).toBe("");
-    expect(result.changed).toBe(true);
+    expect(result.scopePath).toBe("docs/pr/20260212/asset-library");
+    expect(result.path).toBe("docs/pr/20260212/asset-library/readme.md");
+    expect(result.changed).toBe(false);
   });
 
   it("path 不存在时清理 path", () => {

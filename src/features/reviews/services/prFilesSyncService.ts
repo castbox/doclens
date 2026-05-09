@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { isPrDocsPath } from "@/features/docs/domain/pathAliases";
 import { resolveDocsPath } from "@/features/docs/domain/pathRules";
 import { hasPrFilesSnapshot, syncPrFilesSnapshot } from "@/features/reviews/services/prFilesRepo";
 
@@ -62,7 +63,7 @@ export function ensurePrFilesWatcherStarted(): void {
       }
 
       const relative = toPosixPath(fileName.toString());
-      if (relative === "pr" || relative.startsWith("pr/")) {
+      if (isPrDocsPath(relative)) {
         scheduleSync();
       }
     });
