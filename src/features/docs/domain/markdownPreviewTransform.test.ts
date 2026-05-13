@@ -4,7 +4,8 @@ import {
   buildAnchorHash,
   normalizeDocsRelativePath,
   preserveDiffSectionLineBreaks,
-  resolveMarkdownDocPath
+  resolveMarkdownDocPath,
+  resolveMarkdownDocPathCandidates
 } from "./markdownPreviewTransform";
 
 describe("markdownPreviewTransform", () => {
@@ -60,6 +61,24 @@ describe("markdownPreviewTransform", () => {
 
     expect(resolveMarkdownDocPath("docs/prd/doclens_prd.md", currentPath, { pathPrefix: "" })).toBe("docs/prd/doclens_prd.md");
     expect(resolveMarkdownDocPath("../README.md", currentPath, { pathPrefix: "" })).toBe("README.md");
+  });
+
+  it("项目根模式下会为普通相对 markdown 路径保留仓库根 fallback", () => {
+    const currentPath = "docs/pr/20260510/readme/docs-20260510-readme-template-overview.md";
+
+    expect(resolveMarkdownDocPathCandidates("README.md", currentPath, { pathPrefix: "" })).toEqual([
+      "docs/pr/20260510/readme/README.md",
+      "README.md"
+    ]);
+  });
+
+  it("项目根模式下行内代码文件路径可优先按仓库相对路径解析", () => {
+    const currentPath = "docs/pr/20260510/readme/docs-20260510-readme-template-overview.md";
+
+    expect(resolveMarkdownDocPathCandidates("README.md", currentPath, { pathPrefix: "", preferRepositoryRelative: true })).toEqual([
+      "README.md",
+      "docs/pr/20260510/readme/README.md"
+    ]);
   });
 
   it("会拒绝越界和非 markdown 链接", () => {

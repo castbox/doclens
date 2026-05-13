@@ -27,7 +27,7 @@ import {
   Typography
 } from "@mui/material";
 import dynamic from "next/dynamic";
-import type { DocStarStatus, DocStarUpdate, FilePreviewPayload } from "@/features/docs/domain/types";
+import type { DocStarStatus, DocStarUpdate, FilePreviewPayload, PathMetaPayload } from "@/features/docs/domain/types";
 import { DocBreadcrumb } from "@/features/docs/ui/DocBreadcrumb";
 import { EmptyState, LoadingState } from "@/shared/ui/StateCard";
 import type { DocExportFormat } from "@/features/docs/domain/docExport";
@@ -365,7 +365,7 @@ export function DocPreview({
     }
   }, [data, location?.heading, location?.line, markdownHeadings]);
 
-  const handleMarkdownPathNavigate = React.useCallback(
+  const navigateResolvedMarkdownPath = React.useCallback(
     (targetPath: string, anchorHash: string) => {
       if (targetPath === path) {
         if (anchorHash) {
@@ -382,6 +382,55 @@ export function DocPreview({
       }
     },
     [onNavigatePath, path]
+  );
+
+  const resolveExistingMarkdownPath = React.useCallback(
+    async (targetPaths: string[]): Promise<string> => {
+      for (const targetPath of targetPaths) {
+        if (!targetPath) {
+          continue;
+        }
+
+        if (targetPath === path) {
+          return targetPath;
+        }
+
+        try {
+          const response = await fetch(`/api/docs/meta?path=${encodeURIComponent(targetPath)}`);
+          if (!response.ok) {
+            continue;
+          }
+
+          const payload = (await response.json()) as PathMetaPayload;
+          if (payload.nodeType === "file") {
+            return payload.path;
+          }
+        } catch {
+          // Try the next candidate; link resolution must not block preview rendering.
+        }
+      }
+
+      return targetPaths[0] ?? "";
+    },
+    [path]
+  );
+
+  const handleMarkdownPathNavigate = React.useCallback(
+    (targetPaths: string[], anchorHash: string) => {
+      if (targetPaths.length === 0) {
+        return;
+      }
+
+      void (async () => {
+        const resolvedPath = await resolveExistingMarkdownPath(targetPaths);
+        if (!resolvedPath) {
+          return;
+        }
+
+        navigateResolvedMarkdownPath(resolvedPath, anchorHash);
+      })();
+    },
+    [navigateResolvedMarkdownPath, resolveExistingMarkdownPath]
   );
 
   const handleExport = React.useCallback(

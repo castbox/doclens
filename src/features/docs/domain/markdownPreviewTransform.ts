@@ -175,49 +175,86 @@ export function normalizeDocsRelativePath(inputPath: string): string | null {
   return segments.join("/");
 }
 
-export function resolveMarkdownDocPath(
+type ResolveMarkdownDocPathOptions = {
+  pathPrefix?: string;
+  preferRepositoryRelative?: boolean;
+};
+
+function uniquePaths(paths: Array<string | null>): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const path of paths) {
+    if (path === null || seen.has(path)) {
+      continue;
+    }
+
+    seen.add(path);
+    result.push(path);
+  }
+
+  return result;
+}
+
+export function resolveMarkdownDocPathCandidates(
   href: string | undefined,
   currentPath: string,
-  options: { pathPrefix?: string } = {}
-): string | null {
+  options: ResolveMarkdownDocPathOptions = {}
+): string[] {
   if (!href) {
-    return null;
+    return [];
   }
 
   const decodedHref = decodeURIComponent(href).trim();
   if (!decodedHref || decodedHref.startsWith("#")) {
-    return null;
+    return [];
   }
 
   if (/^[a-zA-Z][a-zA-Z\d+.-]*:/.test(decodedHref)) {
-    return null;
+    return [];
   }
 
   const pathOnly = decodedHref.split("#")[0].split("?")[0];
   if (!pathOnly.toLowerCase().endsWith(".md")) {
-    return null;
+    return [];
   }
 
   const pathPrefix = options.pathPrefix ?? "docs";
   if (pathPrefix && pathOnly === pathPrefix) {
-    return normalizeDocsRelativePath("");
+    return uniquePaths([normalizeDocsRelativePath("")]);
   }
 
   if (pathPrefix && pathOnly.startsWith(`${pathPrefix}/`)) {
-    return normalizeDocsRelativePath(pathOnly.slice(pathPrefix.length + 1));
+    return uniquePaths([normalizeDocsRelativePath(pathOnly.slice(pathPrefix.length + 1))]);
   }
 
   if (!pathPrefix && /^(docs|\.codex|\.agents)\//.test(pathOnly)) {
-    return normalizeDocsRelativePath(pathOnly);
+    return uniquePaths([normalizeDocsRelativePath(pathOnly)]);
   }
 
   if (pathOnly.startsWith("/")) {
-    return normalizeDocsRelativePath(pathOnly.slice(1));
+    return uniquePaths([normalizeDocsRelativePath(pathOnly.slice(1))]);
   }
 
   const currentDir = currentPath.includes("/") ? currentPath.slice(0, currentPath.lastIndexOf("/")) : "";
-  const merged = currentDir ? `${currentDir}/${pathOnly}` : pathOnly;
-  return normalizeDocsRelativePath(merged);
+  const currentRelativePath = normalizeDocsRelativePath(currentDir ? `${currentDir}/${pathOnly}` : pathOnly);
+
+  if (pathPrefix) {
+    return uniquePaths([currentRelativePath]);
+  }
+
+  const repositoryRelativePath = normalizeDocsRelativePath(pathOnly);
+  return options.preferRepositoryRelative
+    ? uniquePaths([repositoryRelativePath, currentRelativePath])
+    : uniquePaths([currentRelativePath, repositoryRelativePath]);
+}
+
+export function resolveMarkdownDocPath(
+  href: string | undefined,
+  currentPath: string,
+  options: ResolveMarkdownDocPathOptions = {}
+): string | null {
+  return resolveMarkdownDocPathCandidates(href, currentPath, options)[0] ?? null;
 }
 
 export function buildAnchorHash(href: string | undefined): string {

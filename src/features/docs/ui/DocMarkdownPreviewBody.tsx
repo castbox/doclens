@@ -7,7 +7,7 @@ import rehypeSanitize from "rehype-sanitize";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
 import type { MarkdownHeading } from "@/features/docs/domain/markdownHeading";
-import { buildAnchorHash, resolveMarkdownDocPath } from "@/features/docs/domain/markdownPreviewTransform";
+import { buildAnchorHash, resolveMarkdownDocPathCandidates } from "@/features/docs/domain/markdownPreviewTransform";
 import { markdownSanitizeSchema } from "@/features/docs/domain/markdownSanitize";
 import { isMermaidLanguage, normalizeCodeBlockSource } from "@/features/docs/domain/mermaid";
 import { DocOutline } from "@/features/docs/ui/DocOutline";
@@ -40,7 +40,7 @@ export function DocMarkdownPreviewBody({
   markdownContent: string;
   markdownHeadings: MarkdownHeading[];
   outlineCollapsed: boolean;
-  onNavigatePath: (targetPath: string, anchorHash: string) => void;
+  onNavigatePath: (targetPaths: string[], anchorHash: string) => void;
 }): React.JSX.Element {
   return (
     <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ alignItems: { xs: "stretch", md: "flex-start" } }}>
@@ -148,7 +148,8 @@ export function DocMarkdownPreviewBody({
                 h5: renderHeading("h5"),
                 h6: renderHeading("h6"),
                 a({ href, children, ...props }) {
-                  const targetPath = resolveMarkdownDocPath(href, path, { pathPrefix });
+                  const targetPaths = resolveMarkdownDocPathCandidates(href, path, { pathPrefix });
+                  const targetPath = targetPaths[0];
                   if (targetPath) {
                     const anchorHash = buildAnchorHash(href);
                     const targetHash = anchorHash ? `#${anchorHash}` : "";
@@ -159,7 +160,7 @@ export function DocMarkdownPreviewBody({
                         style={{ color: "var(--mui-palette-secondary-main)", textDecoration: "underline", cursor: "pointer" }}
                         onClick={(event) => {
                           event.preventDefault();
-                          onNavigatePath(targetPath, anchorHash);
+                          onNavigatePath(targetPaths, anchorHash);
                         }}
                         {...props}
                       >
@@ -182,7 +183,11 @@ export function DocMarkdownPreviewBody({
                   const mermaid = isMermaidLanguage(className);
                   const inlineDocsPath = value.trim();
                   const shouldLinkInlinePath = pathPrefix === "" || inlineDocsPath.startsWith(`${pathPrefix ?? "docs"}/`);
-                  const inlineTargetPath = inline && shouldLinkInlinePath ? resolveMarkdownDocPath(inlineDocsPath, path, { pathPrefix }) : null;
+                  const inlineTargetPaths =
+                    inline && shouldLinkInlinePath
+                      ? resolveMarkdownDocPathCandidates(inlineDocsPath, path, { pathPrefix, preferRepositoryRelative: pathPrefix === "" })
+                      : [];
+                  const inlineTargetPath = inlineTargetPaths[0];
 
                   if (mermaid) {
                     return <MermaidCodeBlock code={value} syntaxTheme={codeSyntaxTheme} />;
@@ -198,7 +203,7 @@ export function DocMarkdownPreviewBody({
                         style={{ textDecoration: "none" }}
                         onClick={(event) => {
                           event.preventDefault();
-                          onNavigatePath(inlineTargetPath, anchorHash);
+                          onNavigatePath(inlineTargetPaths, anchorHash);
                         }}
                       >
                         <Box
