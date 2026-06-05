@@ -196,6 +196,18 @@ function uniquePaths(paths: Array<string | null>): string[] {
   return result;
 }
 
+function safelyDecodeURIComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch (error) {
+    if (error instanceof URIError) {
+      return value;
+    }
+
+    throw error;
+  }
+}
+
 export function resolveMarkdownDocPathCandidates(
   href: string | undefined,
   currentPath: string,
@@ -205,7 +217,7 @@ export function resolveMarkdownDocPathCandidates(
     return [];
   }
 
-  const decodedHref = decodeURIComponent(href).trim();
+  const decodedHref = safelyDecodeURIComponent(href).trim();
   if (!decodedHref || decodedHref.startsWith("#")) {
     return [];
   }
@@ -267,5 +279,5 @@ export function buildAnchorHash(href: string | undefined): string {
     return "";
   }
 
-  return decodeURIComponent(raw);
+  return safelyDecodeURIComponent(raw);
 }

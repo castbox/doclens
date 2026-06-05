@@ -89,6 +89,14 @@ describe("markdownPreviewTransform", () => {
     expect(resolveMarkdownDocPath("./image.png", currentPath)).toBeNull();
   });
 
+  it("解析 markdown 链接时不会因非法 percent 编码崩溃", () => {
+    const currentPath = "prd/feature/plan.md";
+
+    expect(resolveMarkdownDocPath("docs/pr/进度100%.md", currentPath)).toBe("pr/进度100%.md");
+    expect(resolveMarkdownDocPath("docs/pr/plan.md?note=100%", currentPath)).toBe("pr/plan.md");
+    expect(resolveMarkdownDocPath("docs/pr/%E8%8C%83%E5%9B%B4.md", currentPath)).toBe("pr/范围.md");
+  });
+
   it("会保留 Diff 章节中纯文本段落的显式换行", () => {
     const input = ["## 关键 Diff（自检）", "第一行", "- 列表项", "", "普通段落"].join("\n");
     const result = preserveDiffSectionLineBreaks(input);
@@ -105,5 +113,9 @@ describe("markdownPreviewTransform", () => {
   it("buildAnchorHash 会提取并解码锚点", () => {
     expect(buildAnchorHash("docs/prd/doclens_prd.md#%E8%8C%83%E5%9B%B4")).toBe("范围");
     expect(buildAnchorHash("docs/prd/doclens_prd.md")).toBe("");
+  });
+
+  it("buildAnchorHash 遇到非法 percent 编码时会保留原始锚点", () => {
+    expect(buildAnchorHash("docs/prd/doclens_prd.md#进度100%")).toBe("进度100%");
   });
 });
