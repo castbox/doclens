@@ -24,6 +24,8 @@ type MermaidCodeBlockProps = {
   presentation?: "document" | "chat";
 };
 
+const CHAT_DIAGRAM_MAX_HEIGHT = "calc(100dvh / 3)";
+
 let mermaidModulePromise: Promise<typeof import("mermaid").default> | null = null;
 
 function loadMermaid() {
@@ -112,7 +114,14 @@ export function MermaidCodeBlock({
     <Box
       sx={
         isChatPresentation
-          ? { position: "relative", width: "100%", minWidth: 0, my: 0.5 }
+          ? {
+              position: "relative",
+              width: "100%",
+              minWidth: 0,
+              minHeight: `min(52px, ${CHAT_DIAGRAM_MAX_HEIGHT})`,
+              maxHeight: CHAT_DIAGRAM_MAX_HEIGHT,
+              overflow: "auto"
+            }
           : { my: 0.5 }
       }
     >
@@ -177,14 +186,21 @@ export function MermaidCodeBlock({
           "& svg": {
             display: "block",
             maxWidth: isChatPresentation ? "100% !important" : "100%",
-            width: isChatPresentation ? "100% !important" : undefined,
-            height: "auto",
+            width: isChatPresentation ? "auto !important" : undefined,
+            height: isChatPresentation ? "auto !important" : "auto",
+            maxHeight: isChatPresentation ? `${CHAT_DIAGRAM_MAX_HEIGHT} !important` : undefined,
             marginInline: isChatPresentation ? 0 : "auto"
           }
         }}
       >
         {loading ? (
-          <Box sx={{ minHeight: 180, display: "grid", placeItems: "center" }}>
+          <Box
+            sx={{
+              minHeight: isChatPresentation ? `min(180px, ${CHAT_DIAGRAM_MAX_HEIGHT})` : 180,
+              display: "grid",
+              placeItems: "center"
+            }}
+          >
             <CircularProgress size={28} />
           </Box>
         ) : null}

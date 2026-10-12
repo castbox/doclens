@@ -1,0 +1,65 @@
+
+> doclens@0.1.0 build /Users/wangyongchang/Jobs/Code/doclens
+> next build
+
+  ▲ Next.js 14.2.35
+  - Environments: .env
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/17) ...
+   Generating static pages (4/17)
+[pr-files-sync] watcher unavailable, fallback to request-time sync Error: ENOENT: no such file or directory, watch '/Users/wangyongchang/Jobs/Code/adsynapse-smart-ads/docs'
+    at FSWatcher.<computed> (node:internal/fs/watchers:316:19)
+    at Object.watch (node:fs:2521:36)
+    at w (/Users/wangyongchang/Jobs/Code/doclens/.next/server/chunks/6471.js:92:2803)
+    at N (/Users/wangyongchang/Jobs/Code/doclens/.next/server/chunks/6471.js:92:3124)
+    at c (/Users/wangyongchang/Jobs/Code/doclens/.next/server/app/api/reviews/pr-files/route.js:1:935)
+    at /Users/wangyongchang/Jobs/Code/doclens/node_modules/.pnpm/next@14.2.35_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/compiled/next-server/app-route.runtime.prod.js:6:38417
+    at /Users/wangyongchang/Jobs/Code/doclens/node_modules/.pnpm/next@14.2.35_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/server/lib/trace/tracer.js:140:36
+    at NoopContextManager.with (/Users/wangyongchang/Jobs/Code/doclens/node_modules/.pnpm/next@14.2.35_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/compiled/@opentelemetry/api/index.js:1:7062)
+    at ContextAPI.with (/Users/wangyongchang/Jobs/Code/doclens/node_modules/.pnpm/next@14.2.35_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/compiled/@opentelemetry/api/index.js:1:518)
+    at NoopTracer.startActiveSpan (/Users/wangyongchang/Jobs/Code/doclens/node_modules/.pnpm/next@14.2.35_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/compiled/@opentelemetry/api/index.js:1:18093) {
+  errno: -2,
+  syscall: 'watch',
+  code: 'ENOENT',
+  path: '/Users/wangyongchang/Jobs/Code/adsynapse-smart-ads/docs',
+  filename: '/Users/wangyongchang/Jobs/Code/adsynapse-smart-ads/docs'
+}
+   Generating static pages (8/17)
+   Generating static pages (12/17)
+ ✓ Generating static pages (17/17)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ○ /                                    147 B          88.9 kB
+├ ○ /_not-found                          885 B          89.7 kB
+├ ƒ /api/chat                            0 B                0 B
+├ ƒ /api/chat/history                    0 B                0 B
+├ ƒ /api/docs/export                     0 B                0 B
+├ ƒ /api/docs/file                       0 B                0 B
+├ ƒ /api/docs/meta                       0 B                0 B
+├ ƒ /api/docs/stars                      0 B                0 B
+├ ƒ /api/docs/tree                       0 B                0 B
+├ ƒ /api/reviews                         0 B                0 B
+├ ƒ /api/reviews/[id]                    0 B                0 B
+├ ƒ /api/reviews/[id]/items/[itemId]     0 B                0 B
+├ ƒ /api/reviews/pr-files                0 B                0 B
+├ ƒ /api/reviews/pr-files/read           0 B                0 B
+├ ƒ /api/search                          0 B                0 B
+├ ○ /docs                                33.7 kB         209 kB
+├ ƒ /docs/view                           147 B          88.9 kB
+├ ○ /reviews                             5.17 kB         178 kB
+├ ƒ /reviews/[id]                        4.56 kB         165 kB
+└ ƒ /search                              7.7 kB          171 kB
++ First Load JS shared by all            88.8 kB
+  ├ chunks/2829-5acd85e0aaa5dbe2.js      31.9 kB
+  ├ chunks/e8b97aad-9f87ef0225076b8a.js  53.7 kB
+  └ other shared chunks (total)          3.2 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
