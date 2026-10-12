@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import ArticleOutlinedIcon from "@mui/icons-material/ArticleOutlined";
+import ChatOutlinedIcon from "@mui/icons-material/ChatOutlined";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import KeyboardDoubleArrowLeftIcon from "@mui/icons-material/KeyboardDoubleArrowLeft";
@@ -94,6 +95,10 @@ const DocMarkdownPreviewBody = dynamic(
   }
 );
 
+const DocumentChatDialog = dynamic(() => import("@/features/chat/ui/DocumentChatDialog"), {
+  ssr: false
+});
+
 function CodeTextPreview({ content, filePath, location }: { content: string; filePath: string; location?: PreviewLocation }): React.JSX.Element {
   const lines = content.split(/\r?\n/);
 
@@ -176,7 +181,8 @@ export function DocPreview({
   onNavigatePath,
   onLoaded,
   externalStarUpdate,
-  onStarChanged
+  onStarChanged,
+  onChatOpenChange
 }: {
   path: string;
   location?: PreviewLocation;
@@ -184,19 +190,24 @@ export function DocPreview({
   onLoaded?: (path: string) => void;
   externalStarUpdate?: DocStarUpdate | null;
   onStarChanged?: (path: string, isStarred: boolean, starredAt?: string | null) => void;
+  onChatOpenChange?: (open: boolean) => void;
 }): React.JSX.Element {
   const previewCacheRef = React.useRef<Map<string, FilePreviewPayload>>(new Map());
   const [data, setData] = React.useState<FilePreviewPayload | null>(null);
+  const [dataRequestKey, setDataRequestKey] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
   const [starState, setStarState] = React.useState<DocStarStatus | null>(null);
   const [starSaving, setStarSaving] = React.useState(false);
   const [copyFeedback, setCopyFeedback] = React.useState<{ severity: "success" | "error"; message: string } | null>(null);
   const [outlineCollapsed, setOutlineCollapsed] = React.useState(true);
+  const [chatOpen, setChatOpen] = React.useState(false);
+  const [chatPath, setChatPath] = React.useState<string | null>(null);
   const [fullContentPath, setFullContentPath] = React.useState<string | null>(null);
   const [exportMenuAnchor, setExportMenuAnchor] = React.useState<HTMLElement | null>(null);
   const [exportingFormat, setExportingFormat] = React.useState<DocExportFormat | null>(null);
   const fullContentRequested = fullContentPath === path;
+  const chatOpenForPath = chatOpen && chatPath === path;
   const previewCacheKey = fullContentRequested ? `${path}::full` : `${path}::preview`;
   const previewRequestUrl = fullContentRequested
     ? `/api/docs/file?path=${encodeURIComponent(path)}&full=1`
@@ -205,10 +216,28 @@ export function DocPreview({
   const markdownHeadings = data?.kind === "markdown" ? data.markdown?.headings ?? [] : [];
   const codePreviewLocation = data?.kind === "code" || data?.kind === "text" ? location : undefined;
   const onLoadedRef = React.useRef(onLoaded);
+  const onChatOpenChangeRef = React.useRef(onChatOpenChange);
 
   React.useEffect(() => {
     onLoadedRef.current = onLoaded;
   }, [onLoaded]);
+
+  React.useEffect(() => {
+    onChatOpenChangeRef.current = onChatOpenChange;
+  }, [onChatOpenChange]);
+
+  React.useEffect(() => {
+    onChatOpenChange?.(chatOpenForPath);
+  }, [chatOpenForPath, onChatOpenChange]);
+
+  React.useEffect(() => () => {
+    onChatOpenChangeRef.current?.(false);
+  }, []);
+
+  React.useEffect(() => {
+    setChatOpen(false);
+    setChatPath(null);
+  }, [path]);
 
   const writePreviewCache = React.useCallback((cacheKey: string, payload: FilePreviewPayload) => {
     const current = previewCacheRef.current;
@@ -242,6 +271,7 @@ export function DocPreview({
   React.useEffect(() => {
     if (!path) {
       setData(null);
+      setDataRequestKey(null);
       setStarState(null);
       return;
     }
@@ -249,6 +279,7 @@ export function DocPreview({
     const cached = previewCacheRef.current.get(previewCacheKey);
     if (cached) {
       setData(cached);
+      setDataRequestKey(previewCacheKey);
       setStarState(cached.star ?? buildFallbackStarState(cached.path));
       setError("");
       setLoading(false);
@@ -278,6 +309,7 @@ export function DocPreview({
         }
 
         setData(payload);
+        setDataRequestKey(previewCacheKey);
         setStarState(payload.star ?? buildFallbackStarState(payload.path));
         writePreviewCache(previewCacheKey, payload);
         onLoadedRef.current?.(payload.path);
@@ -598,6 +630,16 @@ export function DocPreview({
   }
 
   const copyPath = data?.repositoryPath ?? "";
+  const currentDocumentData = dataRequestKey === previewCacheKey ? data : null;
+  const chatDisabledReason = loading
+    ? "文档正在加载，暂不可对话"
+    : error
+      ? "文档加载失败，暂不可对话"
+      : !currentDocumentData
+        ? "文档内容尚未加载，暂不可对话"
+        : currentDocumentData.kind === "pdf" || currentDocumentData.kind === "binary"
+          ? "PDF 和二进制文件暂不支持对话"
+          : "";
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25 }}>
@@ -619,6 +661,23 @@ export function DocPreview({
           </Stack>
 
           <Stack direction="row" gap={0.5}>
+            <Tooltip title={chatDisabledReason || "与当前文档对话"}>
+              <span>
+                <IconButton
+                  size="small"
+                  aria-label="与当前文档对话"
+                  aria-haspopup="dialog"
+                  sx={{ width: 44, height: 44, flexShrink: 0, border: "1px solid", borderColor: "divider", bgcolor: "background.paper" }}
+                  disabled={Boolean(chatDisabledReason)}
+                  onClick={() => {
+                    setChatPath(path);
+                    setChatOpen(true);
+                  }}
+                >
+                  <ChatOutlinedIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
             <Tooltip title={starState?.isStarred ? "取消星标" : "加入星标"}>
               <span>
                 <IconButton
@@ -796,6 +855,19 @@ export function DocPreview({
           {copyFeedback?.message}
         </Alert>
       </Snackbar>
+
+      {chatOpenForPath ? (
+        <DocumentChatDialog
+          key={path}
+          open
+          path={path}
+          displayPath={currentDocumentData?.repositoryPath ?? path}
+          onClose={() => {
+            setChatOpen(false);
+            setChatPath(null);
+          }}
+        />
+      ) : null}
     </Box>
   );
 }

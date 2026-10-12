@@ -43,6 +43,7 @@ export function DocsWorkspace(): React.JSX.Element {
   const [docsDrawerOpen, setDocsDrawerOpen] = React.useState(false);
   const [docsDrawerTab, setDocsDrawerTab] = React.useState<DocsDrawerTab>("tree");
   const [reviewDrawerOpen, setReviewDrawerOpen] = React.useState(false);
+  const [chatVisible, setChatVisible] = React.useState(false);
   const [docStarRefreshToken, setDocStarRefreshToken] = React.useState(0);
   const [latestDocStarUpdate, setLatestDocStarUpdate] = React.useState<DocStarUpdate | null>(null);
   const [latestPrStarUpdate, setLatestPrStarUpdate] = React.useState<PrFileStarUpdate | null>(null);
@@ -334,7 +335,7 @@ export function DocsWorkspace(): React.JSX.Element {
 
       <Drawer
         anchor="left"
-        open={docsDrawerOpen}
+        open={docsDrawerOpen && !chatVisible}
         onClose={() => setDocsDrawerOpen(false)}
         variant={isMdUp ? "persistent" : "temporary"}
         ModalProps={{ keepMounted: true }}
@@ -426,13 +427,14 @@ export function DocsWorkspace(): React.JSX.Element {
               onNavigatePath={handlePreviewNavigate}
               onLoaded={handlePreviewLoaded}
               onStarChanged={handlePreviewStarChanged}
+              onChatOpenChange={setChatVisible}
             />
           </Paper>
         </Stack>
       </Container>
 
       <ReviewDrawer
-        open={reviewDrawerOpen}
+        open={reviewDrawerOpen && !chatVisible}
         onOpenChange={setReviewDrawerOpen}
         selectedPath={selectedPath}
         externalStarUpdate={latestPrStarUpdate}

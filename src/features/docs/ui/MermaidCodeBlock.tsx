@@ -16,10 +16,12 @@ import {
   Typography
 } from "@mui/material";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { sanitizeMermaidSvg } from "@/features/docs/domain/mermaidSvg";
 
 type MermaidCodeBlockProps = {
   code: string;
   syntaxTheme: { [key: string]: React.CSSProperties };
+  presentation?: "document" | "chat";
 };
 
 let mermaidModulePromise: Promise<typeof import("mermaid").default> | null = null;
@@ -44,12 +46,17 @@ function randomId(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export function MermaidCodeBlock({ code, syntaxTheme }: MermaidCodeBlockProps): React.JSX.Element {
+export function MermaidCodeBlock({
+  code,
+  syntaxTheme,
+  presentation = "document"
+}: MermaidCodeBlockProps): React.JSX.Element {
   const renderIdRef = React.useRef(randomId("doclens-mermaid"));
   const [svg, setSvg] = React.useState<string>("");
   const [errorMessage, setErrorMessage] = React.useState("");
   const [loading, setLoading] = React.useState(true);
   const [fullscreenOpen, setFullscreenOpen] = React.useState(false);
+  const isChatPresentation = presentation === "chat";
 
   React.useEffect(() => {
     let active = true;
@@ -71,12 +78,16 @@ export function MermaidCodeBlock({ code, syntaxTheme }: MermaidCodeBlockProps): 
 
       try {
         const mermaid = await loadMermaid();
-        const { svg } = await mermaid.render(renderIdRef.current, code);
+        const { svg: renderedSvg } = await mermaid.render(renderIdRef.current, code);
         if (!active) {
           return;
         }
 
-        setSvg(svg);
+        setSvg(
+          isChatPresentation
+            ? sanitizeMermaidSvg(renderedSvg, undefined, { preserveViewBoxSize: true })
+            : renderedSvg
+        );
       } catch (error) {
         if (!active) {
           return;
@@ -95,43 +106,80 @@ export function MermaidCodeBlock({ code, syntaxTheme }: MermaidCodeBlockProps): 
     return () => {
       active = false;
     };
-  }, [code]);
+  }, [code, isChatPresentation]);
 
   return (
-    <Box sx={{ my: 0.5 }}>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.75 }}>
-        <Typography variant="caption" color="text.secondary">
-          Mermaid 图表
-        </Typography>
-        <Tooltip title={svg && !loading ? "全屏预览" : "渲染完成后可全屏预览"}>
+    <Box
+      sx={
+        isChatPresentation
+          ? { position: "relative", width: "100%", minWidth: 0, my: 0.5 }
+          : { my: 0.5 }
+      }
+    >
+      {isChatPresentation ? (
+        <Tooltip title="放大查看图表">
           <span>
             <IconButton
-              size="small"
-              aria-label="mermaid fullscreen preview"
+              aria-label="放大查看图表"
               onClick={() => {
                 setFullscreenOpen(true);
               }}
               disabled={!svg || loading}
-              sx={{ border: "1px solid", borderColor: "divider", bgcolor: "background.paper" }}
+              sx={{
+                position: "absolute",
+                top: 4,
+                right: 4,
+                zIndex: 2,
+                width: 44,
+                height: 44,
+                color: "text.primary",
+                bgcolor: "background.paper",
+                boxShadow: 1,
+                "&:hover": { bgcolor: "action.hover" }
+              }}
             >
-              <FullscreenIcon fontSize="small" />
+              <FullscreenIcon />
             </IconButton>
           </span>
         </Tooltip>
-      </Stack>
+      ) : (
+        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.75 }}>
+          <Typography variant="caption" color="text.secondary">
+            Mermaid 图表
+          </Typography>
+          <Tooltip title={svg && !loading ? "全屏预览" : "渲染完成后可全屏预览"}>
+            <span>
+              <IconButton
+                size="small"
+                aria-label="mermaid fullscreen preview"
+                onClick={() => {
+                  setFullscreenOpen(true);
+                }}
+                disabled={!svg || loading}
+                sx={{ border: "1px solid", borderColor: "divider", bgcolor: "background.paper" }}
+              >
+                <FullscreenIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+        </Stack>
+      )}
 
       <Box
         sx={{
-          border: "1px solid #D7E4EE",
-          borderRadius: "10px",
-          bgcolor: "#FFFFFF",
-          p: 1.5,
+          border: isChatPresentation ? 0 : "1px solid #D7E4EE",
+          borderRadius: isChatPresentation ? 0 : "10px",
+          bgcolor: isChatPresentation ? "transparent" : "#FFFFFF",
+          p: isChatPresentation ? 0 : 1.5,
           overflowX: "auto",
+          width: isChatPresentation ? "100%" : undefined,
+          minWidth: 0,
           "& svg": {
             display: "block",
-            maxWidth: "100%",
+            maxWidth: isChatPresentation ? "100% !important" : "100%",
+            width: isChatPresentation ? "100% !important" : undefined,
             height: "auto",
-            marginInline: "auto"
+            marginInline: isChatPresentation ? 0 : "auto"
           }
         }}
       >
@@ -204,7 +252,7 @@ export function MermaidCodeBlock({ code, syntaxTheme }: MermaidCodeBlockProps): 
         <AppBar position="sticky" color="default" elevation={0} sx={{ borderBottom: "1px solid", borderColor: "divider" }}>
           <Toolbar sx={{ justifyContent: "space-between", gap: 1 }}>
             <Typography variant="subtitle1" fontWeight={700}>
-              Mermaid 全屏预览
+              {isChatPresentation ? "图表预览" : "Mermaid 全屏预览"}
             </Typography>
             <IconButton
               edge="end"
@@ -218,20 +266,28 @@ export function MermaidCodeBlock({ code, syntaxTheme }: MermaidCodeBlockProps): 
           </Toolbar>
         </AppBar>
 
-        <Box sx={{ flex: 1, overflow: "auto", bgcolor: "#F5F8FC", p: { xs: 1, md: 2 } }}>
+        <Box
+          sx={{
+            flex: 1,
+            overflow: "auto",
+            bgcolor: isChatPresentation ? "background.default" : "#F5F8FC",
+            p: isChatPresentation ? 0 : { xs: 1, md: 2 }
+          }}
+        >
           <Box
             sx={{
               minHeight: "calc(100dvh - 84px)",
-              border: "1px solid #D7E4EE",
-              borderRadius: "12px",
-              bgcolor: "#FFFFFF",
-              p: { xs: 1, md: 2 },
+              border: isChatPresentation ? 0 : "1px solid #D7E4EE",
+              borderRadius: isChatPresentation ? 0 : "12px",
+              bgcolor: isChatPresentation ? "transparent" : "#FFFFFF",
+              p: isChatPresentation ? 0 : { xs: 1, md: 2 },
               overflow: "auto",
               "& svg": {
                 display: "block",
-                width: "100%",
+                width: isChatPresentation ? "auto !important" : "100%",
+                maxWidth: isChatPresentation ? "none !important" : "100%",
                 height: "auto",
-                marginInline: "auto"
+                marginInline: isChatPresentation ? 0 : "auto"
               }
             }}
           >

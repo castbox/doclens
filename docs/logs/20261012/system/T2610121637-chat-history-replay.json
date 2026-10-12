@@ -1,0 +1,92 @@
+{
+  "scope": "最终构建服务重启后的只读回放，未发起模型请求",
+  "desktop": {
+    "messageIds": [
+      "c930472a-33df-4186-b77a-f02e4caf8c13",
+      "31298c0b-a18f-43f4-ac28-4e0d6b093cf2",
+      "6f575082-4739-4fe4-8409-f096ac6f1bed"
+    ],
+    "statuses": [
+      "complete",
+      "complete",
+      "complete"
+    ],
+    "postCount": 0,
+    "diagramReady": true,
+    "noMermaidCaption": true,
+    "expandButton": {
+      "x": 1341,
+      "y": 150.1953125,
+      "width": 44,
+      "height": 44
+    },
+    "frame": {
+      "x": 40,
+      "y": 146.1953125,
+      "width": 1349,
+      "height": 328.8046875
+    },
+    "ancestors": [
+      {
+        "tag": "DIV",
+        "border": "0px",
+        "background": "rgba(0, 0, 0, 0)"
+      },
+      {
+        "tag": "DIV",
+        "border": "0px",
+        "background": "rgba(0, 0, 0, 0)"
+      },
+      {
+        "tag": "DIV",
+        "border": "0px",
+        "background": "rgba(0, 0, 0, 0)"
+      },
+      {
+        "tag": "ARTICLE",
+        "border": "0px",
+        "background": "rgba(0, 0, 0, 0)"
+      },
+      {
+        "tag": "DIV",
+        "border": "0px",
+        "background": "rgba(0, 0, 0, 0)"
+      }
+    ],
+    "focused": true,
+    "backgroundModalCount": 0,
+    "alerts": []
+  },
+  "mobile": {
+    "focused": true,
+    "backgroundDrawerModals": 0,
+    "dialogWidth": 375,
+    "dialogHeight": 812,
+    "logScrollWidth": 364,
+    "logClientWidth": 364,
+    "inlineDiagramWidth": 340,
+    "expandWidth": 44,
+    "expandHeight": 44,
+    "postCount": 0
+  },
+  "zoom": {
+    "dialogCount": 2,
+    "svgWidth": 1239,
+    "svgHeight": 302,
+    "viewBox": "0 0 1238.21875 302",
+    "scrollContainers": [
+      {
+        "client": 373,
+        "scroll": 1239,
+        "overflow": "visible"
+      },
+      {
+        "client": 373,
+        "scroll": 1239,
+        "overflow": "auto"
+      }
+    ],
+    "postCount": 0
+  },
+  "samePersistedIds": true
+}

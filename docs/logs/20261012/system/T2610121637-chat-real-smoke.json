@@ -1,0 +1,46 @@
+{
+  "scope": "本机生产构建 + 自建文档 + 独立 SQLite；两次实际 DeepSeek 生成",
+  "requests": [
+    {
+      "action": "summary",
+      "status": 200
+    },
+    {
+      "action": "send",
+      "status": 200
+    }
+  ],
+  "messageIds": [
+    "c930472a-33df-4186-b77a-f02e4caf8c13",
+    "31298c0b-a18f-43f4-ac28-4e0d6b093cf2",
+    "6f575082-4739-4fe4-8409-f096ac6f1bed"
+  ],
+  "statuses": [
+    "complete",
+    "complete",
+    "complete"
+  ],
+  "roles": [
+    "assistant",
+    "user",
+    "assistant"
+  ],
+  "answerText": "DeepSeek\n主要能力\t说明\n浏览\t浏览 Markdown、代码和文本\n搜索\t搜索文档内容\nAI 解读\t通过 DeepSeek 简洁解读当前文档，并回答追问\n\n聊天记录现在永久保存到 SQLite，再次打开详情页会恢复记录。",
+  "tableCount": 1,
+  "userRow": {
+    "x": 40,
+    "y": 532.1953125,
+    "width": 1349,
+    "height": 50
+  },
+  "userBubble": {
+    "x": 807,
+    "y": 532.1953125,
+    "width": 582,
+    "height": 50
+  },
+  "sourceUsedLatest": true,
+  "allSaved": true,
+  "streaming": false,
+  "alerts": []
+}

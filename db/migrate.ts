@@ -158,6 +158,41 @@ async function main() {
       END
     WHERE (doc_states.path LIKE 'pr/%' OR doc_states.path LIKE 'docs/pr/%') AND EXISTS (SELECT 1 FROM pr_review_files WHERE pr_review_files.path = doc_states.path);
   `);
+
+  await db.run(sql`
+    CREATE TABLE IF NOT EXISTS chat_conversations (
+      id TEXT PRIMARY KEY NOT NULL,
+      docs_root TEXT NOT NULL,
+      doc_path TEXT NOT NULL,
+      repository_path TEXT NOT NULL,
+      last_revision TEXT,
+      active_generation_id TEXT,
+      active_revision TEXT,
+      lease_expires_at INTEGER,
+      lease_duration_ms INTEGER,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      UNIQUE(docs_root, doc_path)
+    );
+  `);
+  await db.run(sql`
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id TEXT PRIMARY KEY NOT NULL,
+      conversation_id TEXT NOT NULL,
+      position INTEGER NOT NULL,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL,
+      error TEXT,
+      parent_message_id TEXT,
+      generation_id TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      UNIQUE(conversation_id, position),
+      FOREIGN KEY(conversation_id) REFERENCES chat_conversations(id) ON DELETE CASCADE
+    );
+  `);
+  await db.run(sql`CREATE INDEX IF NOT EXISTS chat_messages_generation_idx ON chat_messages(generation_id);`);
 }
 
 main().catch((error) => {

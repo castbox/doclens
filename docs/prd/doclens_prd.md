@@ -27,7 +27,8 @@
 1. **浏览**：提供 docs 目录树浏览、文件预览（md/pdf/代码/文本）。
 2. **搜索**：对 docs 内文本类文件进行**全文检索**，支持高亮与命中定位。
 3. **审阅提效**：右侧面板聚焦 `docs/pr` 文件检索（按类别、已读状态筛选），并支持历史审阅单查看与状态流转。
-4. **工程约束**：服务端只读访问文档根目录，防路径穿越；结构清晰可测试。
+4. **文档 AI 对话**：在详情页通过 DeepSeek 阅读当前文本文档，提供简洁中文概述与基于文档的多轮问答。
+5. **工程约束**：服务端只读访问文档根目录，防路径穿越；结构清晰可测试。
 
 ### 2.2 迭代范围（P1/P2）
 
@@ -57,6 +58,7 @@
 3. 在 `/docs` 右侧 PR 文件面板按类别与已读状态筛选并打开文档，已读状态自动更新
 4. 在审阅列表页查看历史审阅记录，并在详情页推进状态流转
 5. 在文档详情或 PR 文件面板中将重点文件加入星标，并在审阅列表页集中回看
+6. 在文档详情页打开 AI 对话，让 DeepSeek 先用易懂中文概述当前文档，再围绕文档内容连续提问
 
 ---
 
@@ -117,6 +119,7 @@
 * 复制文件路径
 * 打开原文件（显示本地路径/仓库路径即可，不做 OS 深度集成）
 * 加入/取消文档星标，供审阅列表页集中查看
+* 在详情页操作栏中，AI 对话按钮位于“加入星标”按钮左侧
 
 ---
 
@@ -206,6 +209,34 @@
 * 审阅列表页展示星标文档列表，按最近星标时间倒序
 * 支持从星标列表直接打开文档、带入文档路径过滤、取消星标
 
+**FR-14 文档 AI 对话**
+
+* 入口：文档详情页右上角增加 Chat 图标按钮，放在“加入星标”左侧。
+* 展示：点击后打开占满视口的全屏对话窗口，适配桌面和移动端；顶部显示当前文档并提供关闭操作，消息区占据主要空间并可独立滚动，输入区固定在底部。
+* 初始概述：打开对话后先请求服务端历史。若该文档没有历史消息，才自动创建首条助手概述；若已有历史则恢复显示，不重复生成概述。助手须阅读服务端从当前安全路径读取的完整文本（不沿用预览截断），以简洁、易懂的中文概括文档主题、关键内容和关注点。若文档超出上游模型可处理范围，明确报错，不得静默截断后冒充完整文档分析。
+* 多轮交互：支持连续提问与回答、流式显示、发送、停止生成、失败后重试、自动聚焦输入框、键盘发送，以及移动端输入和布局。用户问题显示为右侧气泡；助手回答占据对话内容区并以清晰的 Markdown 排版渲染，包含标题、列表、代码等结构时保持可读。每轮内容适合表达流程、关系或状态时，优先生成一张简洁的核心 Mermaid 图；每图建议不超过 6–8 个节点、关系简短，不为凑数绘制多张图。涉及对比、分类、映射、参数、字段或选项时优先使用紧凑 Markdown 表格；简单事实用短句回答。避免同时叠加图表、表格和重复的长篇解释。
+* Mermaid 安全渲染：只渲染 Markdown 中明确标记的 Mermaid 代码块；渲染使用严格安全模式并对 SVG 输出做清洗，禁用任意 HTML、脚本、事件处理器和交互回调。待渲染的 Mermaid 块仍在流式生成时显示“正在生成图表...”占位，不频繁解析或重绘源码；消息进入 `complete`、`stopped` 或 `error` 后再安全渲染一次。解析或安全校验失败时显示原始 Mermaid 源码和可读错误，不丢弃源码。
+* 聊天图表展示：聊天使用 Mermaid renderer 的 `presentation="chat"`，不显示外部卡片轮廓或 Mermaid 标题栏，图表区域仅显示 SVG；右上角放置 44px × 44px 放大按钮。放大预览按 SVG 自然宽高呈现，不缩小以适配视口，并允许横向、纵向平移；大于视口的图表（例如 375px 宽）保持自然尺寸。普通文档预览继续使用 renderer 默认的 `presentation="document"`，保持原有 Mermaid 外观。
+* 文档上下文：浏览器只提交经过应用路由编码的文档 `path` 和当前动作，不提交文档正文或历史消息。服务端每轮调用（summary/send/retry）都依照 docs API 相同的根目录、路径归一化、穿越和忽略目录规则校验 `path`，重新只读加载当前完整文本文档，并通过固定的服务端 system prompt 将完整原文作为上下文发送给 DeepSeek。历史及分页预算只约束聊天消息，不得裁剪或替换原文。客户端不能指定历史角色、system 指令或可信文档内容。
+* 文件类型：当前没有文本提取能力的 PDF 或二进制文件不可发起对话；入口应禁用或在打开时清楚说明暂不支持，不得将原始二进制内容发送给模型。支持类型以服务端实际文本读取能力为准。
+* 持久历史：按 canonical docs root 与规范化文档相对路径隔离，每个文档详情页恢复自己的聊天历史。当前没有账号体系，聊天属于项目级全局状态；关闭或重开窗口不删除历史。历史通过服务端 SQLite 保存到 `DOCLENS_DB_PATH`，不写回 docs，不存入 localStorage/sessionStorage。新增聊天表须通过向后兼容的数据库迁移加入，不重置已有审阅、已读、星标或 PR 文件状态。
+* 恢复与文档变化：每次打开先调用 `GET /api/chat/history?path=...` 恢复消息和生成状态。首次且历史为空时才调用 `POST /api/chat` 的 `summary` 动作。服务端记录产生历史时的文档版本指纹；若文档后续变化，保留原有消息并在界面提示版本已变化，不自动清空或重新总结；后续新请求由服务端读取当前完整文本，并清楚标记使用了更新后的文档。
+* 并发与中断：服务端以 canonical docs root + normalized path 为键建立 SQLite generation lease，同一文档同时只允许一个上游生成任务，防止多窗口重复概述和并发收费。每个增量先持久化，再发送 SSE。停止、关闭聊天、连接掉线、超时和服务进程中断都须保存已生成的部分内容及终止状态；可见消息状态统一为 `pending`、`streaming`、`complete`、`stopped`、`error`，错误原因写入消息的 `error` 字段。重新打开只恢复历史/状态，不自动重放请求；仅用户显式点击重试才允许再次调用模型。失败、停止、超时或中断的助手消息仍保留，重试追加新的助手尝试并关联原消息。
+* 历史与上下文：SQLite 保存完整聊天历史，不因模型上下文上限删除旧消息，不设 20 轮等永久对话上限。每轮模型请求最多带入最近 40 条聊天消息且最多 100,000 字符；超出部分只从本轮聊天历史上下文中排除，数据库中的旧历史继续保留。文档完整原文每轮仍按固定 system prompt 提供，不受聊天上下文窗口或历史分页预算裁剪。存在未带入本轮对话上下文的旧历史时，界面清楚提示：“历史完整保存，本轮参考当前文档与最近对话”。
+* 外部发送：打开聊天会先恢复历史；只有首次空历史自动生成概述，或用户显式发送问题/点击重试时，才向配置的外部 DeepSeek 服务发送文本。界面需清楚说明文档与问题会发送到该服务。
+* 配置与错误：DeepSeek 凭证仅能由服务端环境变量提供；未配置凭证时，API 返回可读错误，界面向用户显示明确提示。密钥不得传到浏览器。
+
+**FR-15 文档对话 API**
+
+* 历史载荷：`ChatHistoryPayload = { "conversationId": string | null, "messages": ChatMessage[], "isGenerating": boolean, "documentChanged": boolean, "hasMore": boolean }`，其中 `ChatMessage = { "id": string, "role": "user" | "assistant", "content": string, "status": "pending" | "streaming" | "complete" | "stopped" | "error", "error": string | null }`。
+* 历史读取：`GET /api/chat/history?path=...&beforeMessageId=...`。`beforeMessageId` 可选，分页时取当前最早消息的既有 `id`，读取更早消息，不引入额外 cursor token。每页最多 40 条且合计最多 100,000 字符；默认返回最新一页，`hasMore` 表示仍有更早历史，`conversationId` 标识该文档的既有会话。无历史时 `conversationId: null`、`messages: []`、`isGenerating: false`、`hasMore: false`；读取操作不会触发 DeepSeek 请求。接口只暴露 `isGenerating` 布尔值，不返回内部 generation lease、上游原始 token 或 `meta` 数据。UI 提供“加载更早的对话”。
+* 流式写入：`POST /api/chat` 请求体为以下互斥联合之一：`{ "path": string, "action": "summary" }`、`{ "path": string, "action": "send", "content": string }`、`{ "path": string, "action": "retry", "messageId": string }`。`summary` 仅在服务端确认当前历史为空时生成；`send` 将用户消息持久化后生成回答；`retry` 只重试指定的、属于当前文档且状态为 `stopped` 或 `error` 的助手消息。客户端不得发送可替换服务端历史的 `messages` 或文档正文。
+* 去重与并发：所有生成动作先竞争同一文档的数据库 generation lease。已有有效 lease 时拒绝新的上游调用并返回可读忙碌状态；已有历史时重复的 `summary` 只返回已存历史，不产生新的上游调用。generation lease 必须可在事务中原子获取和释放；遗留的运行中状态在进程恢复后标为 `interrupted`，不得自动重新 POST。
+* SSE 响应：`text/event-stream` 仅发送以下 JSON 事件：`{ "type": "history", "history": ChatHistoryPayload }`、`{ "type": "delta", "messageId": string, "text": string }`、`{ "type": "error", "message": string, "history"?: ChatHistoryPayload }`、`{ "type": "done", "history": ChatHistoryPayload }`。流式 `history` 和 `done`/`error` 中的历史均为最新页。每条增量先持久化再发送；不发送 `meta` 事件或内部 generation 信息。
+* 服务端配置：`DOCLENS_DEEPSEEK_API_KEY`（必填；无默认值）、`DOCLENS_DEEPSEEK_BASE_URL`（默认 `https://api.deepseek.com`）、`DOCLENS_DEEPSEEK_MODEL`（默认 `deepseek-flash`）、`DOCLENS_DEEPSEEK_TIMEOUT_MS`（默认 `120000`）。这些值仅由服务端读取；前端不得暴露密钥或配置值。模型默认值以 [DeepSeek 官方首次调用文档](https://api-docs.deepseek.com/zh-cn/) 为准。
+* 输入限制：单条新问题最多 4,000 字符；每条持久消息最多 32,000 字符；每轮模型上下文最多 40 条消息且合计最多 100,000 字符，按最新消息选取，不据此删除持久历史；请求 JSON body 最多 512 KiB。
+* 文档限制：服务端只接受不超过 524,288 字节且不超过 100,000 字符的文本文件。任一限制超出时返回明确提示，禁止静默截断或只传入部分文档后声称已阅读全文。
+
 ---
 
 ## 6. 数据与存储（P0）
@@ -258,6 +289,12 @@
 * `name`
 * `starred_at`
 
+**文档聊天历史**
+
+* `chat_conversations` 以 canonical docs root 与 normalized 文档相对路径建立唯一隔离；保存内部 `generation_id` 和 lease metadata，用于生成去重与租约协调。
+* `chat_messages` 保存消息顺序（`position`）及父消息关联（`parent_message_id`），支撑持久历史与重试关系。
+* 聊天迁移须为增量迁移，保留现有表与数据；聊天历史保存在 `DOCLENS_DB_PATH` 对应 SQLite 中，并与只读 docs 源文件隔离。服务端 generation/lease metadata 不属于公开 API。
+
 ---
 
 ## 7. 环境变量（.env）
@@ -280,9 +317,17 @@ DOCLENS_SEARCH_PROVIDER=rg
 
 # 搜索/目录忽略（可选，逗号分隔）
 DOCLENS_SEARCH_IGNORE=third_parties,node_modules,.git,.next,.turbo,dist,build,coverage
+
+# 文档 AI 对话（密钥仅在服务端配置；不要使用 NEXT_PUBLIC_ 前缀）
+DOCLENS_DEEPSEEK_API_KEY=
+DOCLENS_DEEPSEEK_BASE_URL=https://api.deepseek.com
+DOCLENS_DEEPSEEK_MODEL=deepseek-flash
+DOCLENS_DEEPSEEK_TIMEOUT_MS=120000
 ```
 
 > 说明：不建议用 `NEXT_PUBLIC_` 暴露这些路径到浏览器；只在 Server 端读取。若 `DOCLENS_DOCS_ROOT` 指向产品仓库根目录且根目录下存在 `docs/`，服务端以项目根为只读范围，跟踪仓库内 Markdown 文件，包含 `.codex`、`.agents` 等隐藏文档目录，并通过 `DOCLENS_SEARCH_IGNORE` 排除 `.git`、`node_modules`、`.next` 等目录。若 `DOCLENS_DOCS_ROOT` 直接指向 `path/to/product_root/docs`，复制路径与导出路径会补齐仓库相对前缀 `docs/...`。
+
+文档 AI 对话使用上述 `DOCLENS_DEEPSEEK_*` 服务端配置。未配置 `DOCLENS_DEEPSEEK_API_KEY` 时，聊天接口应返回可读配置错误；密钥不得进入客户端 bundle、响应或日志。
 
 ---
 
@@ -299,6 +344,17 @@ DOCLENS_SEARCH_IGNORE=third_parties,node_modules,.git,.next,.turbo,dist,build,co
 
 * 所有 API 不提供写 docs 能力
 * 审阅数据写入 SQLite（与 docs 分离）
+
+**NFR-S3 AI 对话边界**
+
+* `/api/chat` 必须在服务端重新校验文档相对路径，并在服务端读取完整文本；不得接受客户端提供的文档正文作为可信上下文。
+* DeepSeek 凭证只在服务端读取；传输前不得把密钥写入日志，向客户端返回的错误中不得包含凭证或上游敏感响应。
+* AI 聊天消息只写入 `DOCLENS_DB_PATH` 的 SQLite 聊天表，不修改 docs 源文件，也不存入 localStorage/sessionStorage。SQLite 聊天数据与 docs 只读边界分离。
+* 当前无账号系统，聊天历史沿用项目级全局状态边界，按 canonical docs root + normalized path 隔离。
+* 用户首次打开空历史、显式发送问题或点击重试时才向配置的外部 DeepSeek 服务发送文本；恢复已有历史通过 GET 完成，不产生外部调用。界面须说明文档及问题会发送到该服务。
+* 同一文档的生成须持有 SQLite generation lease；多窗口请求不能造成并发上游调用或重复首条概述。
+* 取消、掉线、超时或进程中断须保留已生成文本与状态；恢复通过 GET 完成，不自动重放 POST。重试仅由用户显式点击触发。
+* 接口须执行 FR-15 的请求体、单消息、历史消息数、历史字符数、单问题和文档大小限制；超限时返回明确错误，不得截断文档或历史后继续生成。
 
 ---
 
@@ -357,6 +413,17 @@ DOCLENS_SEARCH_IGNORE=third_parties,node_modules,.git,.next,.turbo,dist,build,co
 4. 右侧 PR 文件面板可按类别与已读状态筛选，按创建时间降序，已读状态可同步
 5. 历史审阅单可查看并推进状态流转
 6. 具备最小回归保护（单测 + 冒烟步骤）并符合职责拆分结构
+7. 文档详情操作栏中的 Chat 图标位于加入星标左侧；文本文件可打开全屏聊天并首先获得基于完整文档的简洁中文概述
+8. 打开已有聊天记录的详情页时先恢复 SQLite 历史，不重复调用概述；多窗口对同一文档打开时，generation lease 防止重复概述与并发上游调用
+9. 聊天支持 Markdown 助手回答、右侧用户气泡、多轮流式提问、停止、重试、键盘与移动端交互；停止、掉线、超时、关闭和进程中断后保留 partial/status，恢复仅 GET，不自动重发
+10. 文档变更后保留历史并提示；新请求按当前文档内容建立上下文
+11. `/api/chat/history` 返回 `ChatHistoryPayload`；SSE 仅有 history/delta/error/done，delta 带 messageId，done 带最终历史，不向客户端暴露内部 generation 信息
+12. `/api/chat/history` 与 `/api/chat` 按 canonical docs root + normalized path 隔离历史；聊天只持久化到 `DOCLENS_DB_PATH` 的 SQLite，通过增量兼容迁移实现；不改 docs 源文件、不写浏览器持久存储
+13. 不支持提取的 PDF/二进制文档显示清楚的不支持状态；凭证仅服务端配置，缺失凭证时返回明确可读错误
+14. 问题、单条消息和 body 分别遵守 4,000 字符、32,000 字符与 512 KiB 限制；每轮模型上下文和历史分页分别最多 40 条/100,000 字符；完整 SQLite 历史不因上下文预算被删除。文档同时遵守 524,288 字节和 100,000 字符限制，超限清楚提示且不得静默截断
+15. 对话历史默认恢复最新页；超过一页时可用既有 message ID 加载更早记录，`hasMore` 正确反映剩余历史；发送和 SSE 完成后仍返回最新页
+16. 当内容适合图示时，回答优先一张 6–8 节点以内的 Mermaid 核心图；比较、分类、映射或参数问题优先紧凑 Markdown 表格；流式期间显示图表生成占位，消息完成/停止/出错后渲染一次；图表解析/安全失败时源码可见且无可执行 HTML/SVG
+17. 聊天 Mermaid 无外框和标题栏，只显示 SVG，右上角放置 44px 放大按钮；放大后按自然尺寸显示并支持横纵平移。普通文档预览继续使用 `presentation="document"` 的原有外观
 
 ---
 
@@ -365,6 +432,6 @@ DOCLENS_SEARCH_IGNORE=third_parties,node_modules,.git,.next,.turbo,dist,build,co
 * **M1**：Docs 浏览 + 预览 + 稳定路由定位
 * **M2**：rg 全文搜索 + 高亮 + 过滤 + 跳转
 * **M3**：PR 文件面板（SQLite 已读同步）+ 历史审阅列表页
-* **M4**：体验增强（快捷键/收藏/索引化搜索/PDF 索引）
+* **M4**：体验增强（快捷键/收藏/索引化搜索/PDF 索引/文档详情页 DeepSeek AI 对话）
 
  

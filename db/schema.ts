@@ -1,4 +1,4 @@
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const reviewSheets = sqliteTable("review_sheets", {
   id: text("id").primaryKey(),
@@ -56,3 +56,44 @@ export const starredDocs = sqliteTable("starred_docs", {
   name: text("name").notNull(),
   starredAt: integer("starred_at", { mode: "timestamp" }).notNull()
 });
+
+export const chatConversations = sqliteTable(
+  "chat_conversations",
+  {
+    id: text("id").primaryKey(),
+    docsRoot: text("docs_root").notNull(),
+    docPath: text("doc_path").notNull(),
+    repositoryPath: text("repository_path").notNull(),
+    lastRevision: text("last_revision"),
+    activeGenerationId: text("active_generation_id"),
+    activeRevision: text("active_revision"),
+    leaseExpiresAt: integer("lease_expires_at"),
+    leaseDurationMs: integer("lease_duration_ms"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull()
+  },
+  (table) => [uniqueIndex("chat_conversations_root_path_uidx").on(table.docsRoot, table.docPath)]
+);
+
+export const chatMessages = sqliteTable(
+  "chat_messages",
+  {
+    id: text("id").primaryKey(),
+    conversationId: text("conversation_id")
+      .notNull()
+      .references(() => chatConversations.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    role: text("role").notNull(),
+    content: text("content").notNull().default(""),
+    status: text("status").notNull(),
+    error: text("error"),
+    parentMessageId: text("parent_message_id"),
+    generationId: text("generation_id"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull()
+  },
+  (table) => [
+    uniqueIndex("chat_messages_conversation_position_uidx").on(table.conversationId, table.position),
+    index("chat_messages_generation_idx").on(table.generationId)
+  ]
+);
