@@ -49,6 +49,8 @@ export default function DocumentChatDialog({
     loadEarlier
   } = useDocumentChat({ open, path });
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  const contentRef = React.useRef<HTMLDivElement>(null);
+  const lastScrollTopRef = React.useRef(0);
   const earlierScrollAnchorRef = React.useRef<{
     path: string;
     messageCount: number;
@@ -79,6 +81,7 @@ export default function DocumentChatDialog({
     }
 
     followsLatestRef.current = true;
+    lastScrollTopRef.current = scrollRef.current?.scrollTop ?? 0;
     setShowJumpToLatest(false);
     earlierScrollAnchorRef.current = null;
   }, [open, path]);
@@ -96,6 +99,7 @@ export default function DocumentChatDialog({
       if (hasPrependedMessages) {
         const addedHeight = container.scrollHeight - anchor.scrollHeight;
         container.scrollTop = anchor.scrollTop + addedHeight;
+        lastScrollTopRef.current = container.scrollTop;
         earlierScrollAnchorRef.current = null;
         const isNearLatest = container.scrollHeight - container.scrollTop - container.clientHeight < 120;
         followsLatestRef.current = isNearLatest;
@@ -113,7 +117,43 @@ export default function DocumentChatDialog({
     }
 
     container.scrollTop = container.scrollHeight;
+    lastScrollTopRef.current = container.scrollTop;
   }, [messages, isStreaming, isLoadingHistory, isLoadingEarlier, open, path]);
+
+  React.useLayoutEffect(() => {
+    const container = scrollRef.current;
+    const content = contentRef.current;
+    if (!open || !container || !content || typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    let frame: number | null = null;
+    const followContentSize = () => {
+      if (frame !== null) {
+        cancelAnimationFrame(frame);
+      }
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        if (!followsLatestRef.current || earlierScrollAnchorRef.current) {
+          return;
+        }
+        container.scrollTop = container.scrollHeight;
+        lastScrollTopRef.current = container.scrollTop;
+        setShowJumpToLatest(false);
+      });
+    };
+
+    const observer = new ResizeObserver(followContentSize);
+    observer.observe(content);
+    observer.observe(container);
+    followContentSize();
+    return () => {
+      observer.disconnect();
+      if (frame !== null) {
+        cancelAnimationFrame(frame);
+      }
+    };
+  }, [open, path, isLoadingHistory, isPreparingSummary]);
 
   const handleScroll = React.useCallback(() => {
     const container = scrollRef.current;
@@ -122,7 +162,12 @@ export default function DocumentChatDialog({
     }
 
     const isNearLatest = container.scrollHeight - container.scrollTop - container.clientHeight < 120;
-    followsLatestRef.current = isNearLatest;
+    const scrolledUp = container.scrollTop < lastScrollTopRef.current - 1;
+    // 内容高度变化引发的 scroll 事件不能被误认为用户上翻。
+    if (isNearLatest || scrolledUp) {
+      followsLatestRef.current = isNearLatest;
+    }
+    lastScrollTopRef.current = container.scrollTop;
     setShowJumpToLatest(!isNearLatest);
     if (earlierScrollAnchorRef.current) {
       earlierScrollAnchorRef.current.scrollHeight = container.scrollHeight;
@@ -154,11 +199,9 @@ export default function DocumentChatDialog({
 
     followsLatestRef.current = true;
     setShowJumpToLatest(false);
-    container.scrollTo({
-      top: container.scrollHeight,
-      behavior: prefersReducedMotion ? "auto" : "smooth"
-    });
-  }, [prefersReducedMotion]);
+    container.scrollTop = container.scrollHeight;
+    lastScrollTopRef.current = container.scrollTop;
+  }, []);
 
   const handleSend = React.useCallback((content: string) => {
     followsLatestRef.current = true;
@@ -266,11 +309,13 @@ export default function DocumentChatDialog({
             overscrollBehavior: "contain",
             scrollbarGutter: "stable",
             WebkitOverflowScrolling: "touch",
+            scrollBehavior: "auto",
             overflowAnchor: "none"
           }}
         >
           {isLoadingHistory ? (
             <Stack
+              ref={contentRef}
               role="status"
               aria-live="polite"
               alignItems="center"
@@ -283,6 +328,7 @@ export default function DocumentChatDialog({
             </Stack>
           ) : isPreparingSummary ? (
             <Stack
+              ref={contentRef}
               role="status"
               aria-live="polite"
               alignItems="center"
@@ -295,6 +341,7 @@ export default function DocumentChatDialog({
             </Stack>
           ) : (
             <Stack
+              ref={contentRef}
               spacing={{ xs: 2, sm: 2.5 }}
               sx={{
                 width: "100%",
@@ -357,22 +404,24 @@ export default function DocumentChatDialog({
         </Box>
 
         {showJumpToLatest ? (
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<KeyboardArrowDownRoundedIcon />}
+          <IconButton
+            aria-label="回到底部"
             onClick={jumpToLatest}
             sx={{
               position: "absolute",
               right: { xs: 12, sm: 20 },
               bottom: 12,
-              minHeight: 44,
+              width: 44,
+              height: 44,
+              border: 1,
+              borderColor: "divider",
               bgcolor: "background.paper",
-              boxShadow: "0 2px 8px rgba(15,23,42,0.12)"
+              boxShadow: "0 2px 8px rgba(15,23,42,0.12)",
+              "&:hover": { bgcolor: "action.hover" }
             }}
           >
-            回到底部
-          </Button>
+            <KeyboardArrowDownRoundedIcon />
+          </IconButton>
         ) : null}
       </Box>
 

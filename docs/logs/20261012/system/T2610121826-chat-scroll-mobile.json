@@ -1,0 +1,89 @@
+{
+  "scope": "独立自建文档与预置历史；动态高度通过临时 DOM 布局变化模拟，不调用模型",
+  "view": "mobile",
+  "initial": {
+    "scrollTop": 6338.5,
+    "scrollHeight": 6915,
+    "clientHeight": 577,
+    "bottomGap": -0.5,
+    "lastLineBottom": 647.1484375,
+    "logBottom": 663.203125,
+    "footerTop": 663.203125,
+    "graphId": "doclens-mermaid-fqw1x037",
+    "postCount": 0
+  },
+  "jumpIcon": {
+    "text": "",
+    "width": 44,
+    "height": 44,
+    "hasArrow": true,
+    "label": "回到底部"
+  },
+  "readingBefore": {
+    "scrollTop": 5638.5,
+    "scrollHeight": 6915,
+    "clientHeight": 577,
+    "bottomGap": 699.5,
+    "lastLineBottom": 1347.1484375,
+    "logBottom": 663.203125,
+    "footerTop": 663.203125,
+    "graphId": "doclens-mermaid-fqw1x037",
+    "postCount": 0
+  },
+  "readingAfterGrowth": {
+    "scrollTop": 5638.5,
+    "scrollHeight": 7275,
+    "clientHeight": 577,
+    "bottomGap": 1059.5,
+    "lastLineBottom": 1707.1484375,
+    "logBottom": 663.203125,
+    "footerTop": 663.203125,
+    "graphId": "doclens-mermaid-fqw1x037",
+    "postCount": 0
+  },
+  "afterJump": {
+    "scrollTop": 6698.5,
+    "scrollHeight": 7275,
+    "clientHeight": 577,
+    "bottomGap": -0.5,
+    "lastLineBottom": 647.1484375,
+    "logBottom": 663.203125,
+    "footerTop": 663.203125,
+    "graphId": "doclens-mermaid-fqw1x037",
+    "postCount": 0
+  },
+  "afterLateGrowth": {
+    "scrollTop": 6938.5,
+    "scrollHeight": 7515,
+    "clientHeight": 577,
+    "bottomGap": -0.5,
+    "lastLineBottom": 647.1484375,
+    "logBottom": 663.203125,
+    "footerTop": 663.203125,
+    "graphId": "doclens-mermaid-fqw1x037",
+    "postCount": 0
+  },
+  "afterInputGrowth": {
+    "scrollTop": 7061.5,
+    "scrollHeight": 7515,
+    "clientHeight": 454,
+    "bottomGap": -0.5,
+    "lastLineBottom": 524.1484375,
+    "logBottom": 540.6015625,
+    "footerTop": 540.6015625,
+    "graphId": "doclens-mermaid-fqw1x037",
+    "postCount": 0
+  },
+  "afterWindowResize": {
+    "scrollTop": 7202.5,
+    "scrollHeight": 7445,
+    "clientHeight": 242,
+    "bottomGap": 0.5,
+    "lastLineBottom": 312.484375,
+    "logBottom": 328.6015625,
+    "footerTop": 328.6015625,
+    "graphId": "doclens-mermaid-fqw1x037",
+    "postCount": 0
+  },
+  "allPassed": true
+}

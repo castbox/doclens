@@ -1,0 +1,80 @@
+{
+  "scope": "独立代码快照；自建历史，不调用模型",
+  "cases": [
+    {
+      "limit": 300,
+      "blockHeight": 66.8515625,
+      "button": {
+        "width": 44,
+        "height": 44,
+        "leftOffset": 4,
+        "topOffset": 4,
+        "title": null
+      },
+      "diagramGap": 4,
+      "postCount": 0,
+      "tooltipCount": 0,
+      "view": "desktop",
+      "fixture": "wide.md",
+      "passed": true
+    },
+    {
+      "limit": 300,
+      "blockHeight": 300,
+      "button": {
+        "width": 44,
+        "height": 44,
+        "leftOffset": 4,
+        "topOffset": 4,
+        "title": null
+      },
+      "diagramGap": 4,
+      "postCount": 0,
+      "tooltipCount": 0,
+      "view": "desktop",
+      "fixture": "tall.md",
+      "passed": true
+    },
+    {
+      "limit": 270.6666666666667,
+      "blockHeight": 52,
+      "button": {
+        "width": 44,
+        "height": 44,
+        "leftOffset": 4,
+        "topOffset": 4,
+        "title": null
+      },
+      "diagramGap": 4,
+      "postCount": 0,
+      "tooltipCount": 0,
+      "view": "mobile",
+      "fixture": "wide.md",
+      "passed": true
+    },
+    {
+      "limit": 270.6666666666667,
+      "blockHeight": 270.6640625,
+      "button": {
+        "width": 44,
+        "height": 44,
+        "leftOffset": 4,
+        "topOffset": 4,
+        "title": null
+      },
+      "diagramGap": 4,
+      "postCount": 0,
+      "tooltipCount": 0,
+      "view": "mobile",
+      "fixture": "tall.md",
+      "passed": true
+    }
+  ],
+  "zoom": {
+    "width": 140,
+    "height": 798,
+    "maxHeight": "none",
+    "passed": true
+  },
+  "allPassed": true
+}

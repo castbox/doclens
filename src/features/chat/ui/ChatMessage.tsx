@@ -252,6 +252,18 @@ export function ChatMessage({
   isStreaming?: boolean;
 }): React.JSX.Element {
   const theme = useTheme();
+  const status =
+    message.status === "complete" || message.status === "stopped" || message.status === "error"
+      ? message.status
+      : isStreaming || message.status === "streaming"
+        ? "streaming"
+        : "pending";
+  const mermaidDeferred = status === "pending" || status === "streaming";
+  const mermaidStatus = status === "pending" ? "pending" : "streaming";
+  const markdownComponents = React.useMemo(
+    () => getMarkdownComponents(mermaidDeferred, mermaidStatus),
+    [mermaidDeferred, mermaidStatus]
+  );
 
   if (message.role === "user") {
     return (
@@ -296,12 +308,6 @@ export function ChatMessage({
     );
   }
 
-  const status =
-    message.status === "complete" || message.status === "stopped" || message.status === "error"
-      ? message.status
-      : isStreaming || message.status === "streaming"
-        ? "streaming"
-        : "pending";
   const statusLabel =
     status === "pending"
       ? "等待生成"
@@ -312,11 +318,6 @@ export function ChatMessage({
           : status === "error"
             ? "生成中断"
             : null;
-  const mermaidDeferred = status === "pending" || status === "streaming";
-  const markdownComponents = getMarkdownComponents(
-    mermaidDeferred,
-    status === "pending" ? "pending" : "streaming"
-  );
 
   return (
     <Box

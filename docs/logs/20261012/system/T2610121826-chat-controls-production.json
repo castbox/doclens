@@ -1,0 +1,52 @@
+{
+  "scope": "最终生产构建回放；自建文档与预置历史，未调用模型",
+  "cases": [
+    {
+      "view": "desktop",
+      "initial": {
+        "gap": 0.5,
+        "lastLineVisible": true,
+        "graphId": "doclens-mermaid-eun0as6j",
+        "postCount": 0
+      },
+      "iconOnly": true,
+      "afterClick": {
+        "gap": 0.5,
+        "lastLineVisible": true,
+        "graphId": "doclens-mermaid-eun0as6j",
+        "postCount": 0
+      },
+      "afterGrowth": {
+        "gap": 0.5,
+        "lastLineVisible": true,
+        "graphId": "doclens-mermaid-eun0as6j",
+        "postCount": 0
+      },
+      "passed": true
+    },
+    {
+      "view": "mobile",
+      "initial": {
+        "gap": -0.5,
+        "lastLineVisible": true,
+        "graphId": "doclens-mermaid-wgjrmk3s",
+        "postCount": 0
+      },
+      "iconOnly": true,
+      "afterClick": {
+        "gap": -0.5,
+        "lastLineVisible": true,
+        "graphId": "doclens-mermaid-wgjrmk3s",
+        "postCount": 0
+      },
+      "afterGrowth": {
+        "gap": -0.5,
+        "lastLineVisible": true,
+        "graphId": "doclens-mermaid-wgjrmk3s",
+        "postCount": 0
+      },
+      "passed": true
+    }
+  ],
+  "allPassed": true
+}

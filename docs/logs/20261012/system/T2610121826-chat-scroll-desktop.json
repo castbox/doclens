@@ -1,0 +1,121 @@
+{
+  "scope": "独立自建文档与预置历史；动态高度通过临时 DOM 布局变化模拟，不调用模型",
+  "baseline": {
+    "initial": {
+      "scrollTop": 3639.5,
+      "scrollHeight": 4441,
+      "clientHeight": 681,
+      "bottomGap": 120.5,
+      "lastLineBottom": 847.2890625,
+      "logBottom": 751.203125,
+      "footerTop": 751.203125,
+      "mainHeight": 681.0078125
+    },
+    "afterWheel": {
+      "scrollTop": 3759.5,
+      "scrollHeight": 4441,
+      "clientHeight": 681,
+      "bottomGap": 0.5,
+      "lastLineBottom": 727.2890625,
+      "logBottom": 751.203125,
+      "footerTop": 751.203125,
+      "mainHeight": 681.0078125
+    },
+    "forcedBottom": {
+      "scrollTop": 3759.5,
+      "scrollHeight": 4441,
+      "clientHeight": 681,
+      "bottomGap": 0.5,
+      "lastLineBottom": 727.2890625,
+      "logBottom": 751.203125,
+      "footerTop": 751.203125,
+      "mainHeight": 681.0078125
+    }
+  },
+  "view": "desktop",
+  "initial": {
+    "scrollTop": 3759.5,
+    "scrollHeight": 4441,
+    "clientHeight": 681,
+    "bottomGap": 0.5,
+    "lastLineBottom": 727.2890625,
+    "logBottom": 751.203125,
+    "footerTop": 751.203125,
+    "graphId": "doclens-mermaid-4a5wbt42",
+    "postCount": 0
+  },
+  "jumpIcon": {
+    "text": "",
+    "width": 44,
+    "height": 44,
+    "hasArrow": true,
+    "label": "回到底部"
+  },
+  "readingBefore": {
+    "scrollTop": 3059.5,
+    "scrollHeight": 4441,
+    "clientHeight": 681,
+    "bottomGap": 700.5,
+    "lastLineBottom": 1427.2890625,
+    "logBottom": 751.203125,
+    "footerTop": 751.203125,
+    "graphId": "doclens-mermaid-4a5wbt42",
+    "postCount": 0
+  },
+  "readingAfterGrowth": {
+    "scrollTop": 3059.5,
+    "scrollHeight": 4801,
+    "clientHeight": 681,
+    "bottomGap": 1060.5,
+    "lastLineBottom": 1787.2890625,
+    "logBottom": 751.203125,
+    "footerTop": 751.203125,
+    "graphId": "doclens-mermaid-4a5wbt42",
+    "postCount": 0
+  },
+  "afterJump": {
+    "scrollTop": 4119.5,
+    "scrollHeight": 4801,
+    "clientHeight": 681,
+    "bottomGap": 0.5,
+    "lastLineBottom": 727.2890625,
+    "logBottom": 751.203125,
+    "footerTop": 751.203125,
+    "graphId": "doclens-mermaid-4a5wbt42",
+    "postCount": 0
+  },
+  "afterLateGrowth": {
+    "scrollTop": 4359.5,
+    "scrollHeight": 5041,
+    "clientHeight": 681,
+    "bottomGap": 0.5,
+    "lastLineBottom": 727.2890625,
+    "logBottom": 751.203125,
+    "footerTop": 751.203125,
+    "graphId": "doclens-mermaid-4a5wbt42",
+    "postCount": 0
+  },
+  "afterInputGrowth": {
+    "scrollTop": 4482,
+    "scrollHeight": 5041,
+    "clientHeight": 558,
+    "bottomGap": 1,
+    "lastLineBottom": 604.7890625,
+    "logBottom": 628.6015625,
+    "footerTop": 628.6015625,
+    "graphId": "doclens-mermaid-4a5wbt42",
+    "postCount": 0
+  },
+  "afterWindowResize": {
+    "scrollTop": 4682,
+    "scrollHeight": 4941,
+    "clientHeight": 258,
+    "bottomGap": 1,
+    "lastLineBottom": 304.7890625,
+    "logBottom": 328.6015625,
+    "footerTop": 328.6015625,
+    "graphId": "doclens-mermaid-4a5wbt42",
+    "postCount": 0
+  },
+  "allPassed": true
+}

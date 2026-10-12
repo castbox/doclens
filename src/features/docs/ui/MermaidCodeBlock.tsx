@@ -126,31 +126,27 @@ export function MermaidCodeBlock({
       }
     >
       {isChatPresentation ? (
-        <Tooltip title="放大查看图表">
-          <span>
-            <IconButton
-              aria-label="放大查看图表"
-              onClick={() => {
-                setFullscreenOpen(true);
-              }}
-              disabled={!svg || loading}
-              sx={{
-                position: "absolute",
-                top: 4,
-                right: 4,
-                zIndex: 2,
-                width: 44,
-                height: 44,
-                color: "text.primary",
-                bgcolor: "background.paper",
-                boxShadow: 1,
-                "&:hover": { bgcolor: "action.hover" }
-              }}
-            >
-              <FullscreenIcon />
-            </IconButton>
-          </span>
-        </Tooltip>
+        <IconButton
+          aria-label="放大查看图表"
+          onClick={() => {
+            setFullscreenOpen(true);
+          }}
+          disabled={!svg || loading}
+          sx={{
+            position: "absolute",
+            top: 4,
+            left: 4,
+            zIndex: 2,
+            width: 44,
+            height: 44,
+            color: "text.primary",
+            bgcolor: "background.paper",
+            boxShadow: 1,
+            "&:hover": { bgcolor: "action.hover" }
+          }}
+        >
+          <FullscreenIcon />
+        </IconButton>
       ) : (
         <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.75 }}>
           <Typography variant="caption" color="text.secondary">
@@ -180,6 +176,8 @@ export function MermaidCodeBlock({
           borderRadius: isChatPresentation ? 0 : "10px",
           bgcolor: isChatPresentation ? "transparent" : "#FFFFFF",
           p: isChatPresentation ? 0 : 1.5,
+          pl: isChatPresentation ? "52px" : undefined,
+          boxSizing: isChatPresentation ? "border-box" : undefined,
           overflowX: "auto",
           width: isChatPresentation ? "100%" : undefined,
           minWidth: 0,
