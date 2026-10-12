@@ -1,0 +1,10 @@
+{
+  "focused": true,
+  "disabled": false,
+  "label": "新建聊天",
+  "viewport": {
+    "width": 320,
+    "height": 812
+  },
+  "headerHeight": 128.75
+}

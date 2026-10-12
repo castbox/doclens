@@ -1,0 +1,8 @@
+{
+  "stoppedPartialSaved": true,
+  "retryPreservesFailedAttempt": true,
+  "documentConversationPreserved": true,
+  "fixtureSourceUnchanged": true,
+  "snapshotFiles": 158,
+  "fullTests": 194
+}

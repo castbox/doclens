@@ -1,0 +1,67 @@
+- generic [ref=e1] [box=0,0,1200,919]:
+  - alert [ref=e2] [box=-1,-1,1,1]
+  - generic [aria-hidden] [ref=e3] [box=0,0,1200,919]:
+    - banner [ref=e4] [box=0,0,1200,66]:
+      - generic [ref=e6] [box=13,11,1174,44]:
+        - generic [ref=e7] [box=13,17,249,32]:
+          - heading [level=6] [ref=e413] [box=13,17,76,32]: DocLens
+          - generic [ref=e9] [box=99,23,163,20]: Docs 浏览 + 搜索 + 审阅工作台
+        - generic [ref=e10] [box=835,11,352,44]:
+          - button [ref=e414] [cursor=pointer] [box=835,11,96,44]: 新建聊天
+          - button [ref=e417] [cursor=pointer] [box=939,11,96,44]: 收起目录
+          - link [ref=e418] [cursor=pointer] [box=1043,11,64,44]:
+            - /url: /search
+            - text: 搜索页
+          - link [ref=e419] [cursor=pointer] [box=1115,11,72,44]:
+            - /url: /reviews
+            - text: 审阅列表
+    - generic [ref=e283] [box=347,87,462,355]:
+      - generic [ref=e284] [box=347,87,462,114]:
+        - navigation [ref=e420] [box=349,89,459,26]:
+          - list [ref=e286] [box=349,89,459,26]:
+            - listitem [ref=e287] [box=349,89,28,26]:
+              - button [ref=e421] [cursor=pointer] [box=349,93,28,21]: docs
+            - listitem [aria-hidden] [ref=e289] [box=384,89,6,26]: /
+            - listitem [ref=e290] [box=398,91,56,21]:
+              - paragraph [ref=e291] [box=398,91,56,21]: guide.md
+        - generic [ref=e292] [box=349,123,459,76]:
+          - generic [ref=e293] [box=349,123,218,24]:
+            - heading [level=6] [ref=e422] [box=349,123,86,24]: guide.md
+            - generic [ref=e295] [box=443,124,90,22]: MARKDOWN
+            - generic [ref=e297] [box=541,125,25,20]: 62 B
+          - generic [ref=e298] [box=349,155,268,44]:
+            - button [ref=e424] [cursor=pointer] [box=349,155,44,44]
+            - button [ref=e426] [cursor=pointer] [box=397,155,40,40]
+            - button [ref=e427] [cursor=pointer] [box=441,155,32,44]
+            - button [ref=e429] [cursor=pointer] [box=477,155,32,32]
+            - button [ref=e430] [cursor=pointer] [box=513,155,32,44]
+            - link [ref=e431] [cursor=pointer] [box=549,155,32,44]:
+              - /url: /api/docs/file?path=guide.md&raw=1
+            - button [ref=e432] [cursor=pointer] [box=585,155,32,44]
+      - separator [ref=e325] [box=347,211,462,1]
+      - generic [ref=e328] [box=366,241,424,94]:
+        - heading [level=1] [ref=e433] [box=366,241,424,51]: 冒烟文档
+        - paragraph [ref=e330] [box=366,307,424,28]: 文档聊天仅用于验证旧入口保持。
+    - generic [box=1220,179,34,23]: 类别
+    - generic [box=1366,179,58,23]: 已读状态
+    - button [ref=e435] [cursor=pointer] [box=1053,78,137,37]: 打开 PR 面板
+  - dialog [ref=e441] [box=0,0,1200,919]:
+    - banner [ref=e442] [box=0,0,1200,67]:
+      - generic [ref=e443] [box=20,10,1160,44]:
+        - generic [ref=e445] [box=20,21,1104,22]:
+          - heading "新建聊天" [level=1] [ref=e446] [box=20,21,64,22]
+          - generic [ref=e447] [box=92,21,75,22]: DeepSeek
+        - button "关闭聊天" [ref=e449] [cursor=pointer] [box=1136,10,44,44]
+    - main [ref=e452] [box=0,67,1200,703]:
+      - log "聊天记录" [ref=e453] [box=0,67,1200,703]:
+        - paragraph [ref=e455] [box=40,405,1109,26]: 发送消息开始聊天
+    - contentinfo [ref=e456] [box=0,770,1200,149]:
+      - generic [ref=e458] [box=20,783,1160,100]:
+        - textbox "输入消息" [active] [ref=e461] [box=31,794,1138,25]:
+          - /placeholder: 输入消息…
+        - generic [ref=e462] [box=31,829,1138,44]:
+          - generic [ref=e463] [box=31,842,159,17]: Enter 发送 · Shift + Enter 换行
+          - generic [ref=e464] [box=1071,829,98,44]:
+            - generic [ref=e465] [box=1071,841,46,20]: 0 / 4000
+            - button "发送消息" [disabled] [box=1125,829,44,44]
+      - paragraph [ref=e466] [box=20,890,1160,17]: 消息会发送到 DeepSeek，聊天记录完整保存并参考最近对话。

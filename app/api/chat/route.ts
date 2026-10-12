@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { isSameOriginRequest } from "./origin";
-import { ChatValidationError, parseDocumentChatRequest } from "@/features/chat/domain/chatValidation";
+import { ChatValidationError, parseChatRequest } from "@/features/chat/domain/chatValidation";
 import { PathSecurityError } from "@/features/docs/domain/pathRules";
 import { MAX_CHAT_REQUEST_BYTES } from "@/features/chat/domain/types";
-import { ChatServiceError, openDocumentChat } from "@/features/chat/services/deepseekChatService";
+import { ChatServiceError, openDocumentChat, openStandaloneChat } from "@/features/chat/services/deepseekChatService";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -99,9 +99,9 @@ export async function POST(request: Request): Promise<Response> {
     return jsonError(INVALID_BODY_MESSAGE, 400);
   }
 
-  let chatRequest: ReturnType<typeof parseDocumentChatRequest>;
+  let chatRequest: ReturnType<typeof parseChatRequest>;
   try {
-    chatRequest = parseDocumentChatRequest(parsedBody);
+    chatRequest = parseChatRequest(parsedBody);
   } catch (error) {
     if (error instanceof ChatValidationError) {
       return jsonError(error.message, 400);
@@ -111,7 +111,9 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const stream = await openDocumentChat(chatRequest, request.signal);
+    const stream = "conversationId" in chatRequest
+      ? await openStandaloneChat(chatRequest, request.signal)
+      : await openDocumentChat(chatRequest, request.signal);
     return new Response(stream, {
       status: 200,
       headers: {

@@ -2,16 +2,20 @@ import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { JSDOM } from "jsdom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ChatHistoryPayload, ChatMessage, DocumentChatRequest } from "../domain/types";
+import type { ChatHistoryPayload, ChatMessage, ChatRequest } from "../domain/types";
 import {
   ChatClientError,
+  createStandaloneChat,
   loadDocumentChatHistory,
+  loadStandaloneChatHistory,
   streamDocumentChat
 } from "../services/chatClient";
 import { useDocumentChat, type UseDocumentChatResult } from "./useDocumentChat";
 
 const mocks = vi.hoisted(() => ({
+  createStandaloneChat: vi.fn(),
   loadDocumentChatHistory: vi.fn(),
+  loadStandaloneChatHistory: vi.fn(),
   streamDocumentChat: vi.fn()
 }));
 
@@ -25,7 +29,9 @@ vi.mock("../services/chatClient", () => ({
       this.status = status;
     }
   },
+  createStandaloneChat: mocks.createStandaloneChat,
   loadDocumentChatHistory: mocks.loadDocumentChatHistory,
+  loadStandaloneChatHistory: mocks.loadStandaloneChatHistory,
   streamDocumentChat: mocks.streamDocumentChat
 }));
 
@@ -47,8 +53,15 @@ type PendingHistory = {
   reject: (error: Error) => void;
 };
 
+type PendingStandaloneHistory = {
+  conversationId: string;
+  options: LoadOptions;
+  resolve: (history: ChatHistoryPayload) => void;
+  reject: (error: Error) => void;
+};
+
 type PendingStream = {
-  request: DocumentChatRequest;
+  request: ChatRequest;
   options: StreamOptions;
   resolve: () => void;
   reject: (error: Error) => void;
@@ -59,18 +72,20 @@ let root: Root;
 let container: HTMLElement;
 let current: UseDocumentChatResult;
 let pendingHistories: PendingHistory[];
+let pendingStandaloneHistories: PendingStandaloneHistory[];
 let pendingStreams: PendingStream[];
 const loadMock = vi.mocked(loadDocumentChatHistory);
+const standaloneLoadMock = vi.mocked(loadStandaloneChatHistory);
 const streamMock = vi.mocked(streamDocumentChat);
 
-function Harness({ open, path }: { open: boolean; path: string }) {
-  current = useDocumentChat({ open, path });
+function Harness({ open, path, conversationId }: { open: boolean; path: string; conversationId?: string }) {
+  current = useDocumentChat({ open, path, conversationId });
   return null;
 }
 
-function render(open = true, path = "guide.md", strict = false): void {
+function render(open = true, path = "guide.md", strict = false, conversationId?: string): void {
   act(() => {
-    const app = createElement(Harness, { open, path });
+    const app = createElement(Harness, { open, path, conversationId });
     root.render(strict ? createElement(StrictMode, null, app) : app);
   });
 }
@@ -119,6 +134,14 @@ async function resolveHistory(request: PendingHistory, history: ChatHistoryPaylo
 async function rejectHistory(request: PendingHistory, error: Error): Promise<void> {
   await act(async () => {
     request.reject(error);
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
+async function resolveStandaloneHistory(request: PendingStandaloneHistory, history: ChatHistoryPayload): Promise<void> {
+  await act(async () => {
+    request.resolve(history);
     await Promise.resolve();
     await Promise.resolve();
   });
@@ -184,6 +207,7 @@ beforeEach(() => {
   });
   root = createRoot(container);
   pendingHistories = [];
+  pendingStandaloneHistories = [];
   pendingStreams = [];
   current = undefined as unknown as UseDocumentChatResult;
 
@@ -192,7 +216,13 @@ beforeEach(() => {
       pendingHistories.push({ path, options, resolve, reject });
     })
   );
-  streamMock.mockReset().mockImplementation((request: DocumentChatRequest, options: StreamOptions) =>
+  vi.mocked(createStandaloneChat).mockReset();
+  standaloneLoadMock.mockReset().mockImplementation((conversationId: string, options: LoadOptions) =>
+    new Promise<ChatHistoryPayload>((resolve, reject) => {
+      pendingStandaloneHistories.push({ conversationId, options, resolve, reject });
+    })
+  );
+  streamMock.mockReset().mockImplementation((request: ChatRequest, options: StreamOptions) =>
     new Promise<void>((resolve, reject) => {
       pendingStreams.push({ request, options, resolve, reject });
     })
@@ -206,6 +236,60 @@ afterEach(() => {
 });
 
 describe("useDocumentChat", () => {
+  it("独立聊天按会话 ID 读取历史，空历史保持空白且发送使用该 ID", async () => {
+    const conversationId = "standalone-conversation-1";
+    render(true, "", false, conversationId);
+    await advance(50);
+
+    expect(standaloneLoadMock).toHaveBeenCalledTimes(1);
+    expect(standaloneLoadMock).toHaveBeenCalledWith(conversationId, expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    expect(loadMock).not.toHaveBeenCalled();
+
+    await resolveStandaloneHistory(pendingStandaloneHistories[0], chatHistory([], { conversationId }));
+    expect(current.messages).toEqual([]);
+    expect(current.isLoadingHistory).toBe(false);
+    expect(streamMock).not.toHaveBeenCalled();
+
+    let accepted = false;
+    act(() => {
+      accepted = current.send("第一条独立聊天消息");
+    });
+    expect(accepted).toBe(true);
+    expect(pendingStreams[0].request).toEqual({
+      conversationId,
+      action: "send",
+      content: "第一条独立聊天消息"
+    });
+  });
+
+  it("独立聊天的更早分页与重试都使用同一会话 ID", async () => {
+    const conversationId = "standalone-conversation-2";
+    render(true, "", false, conversationId);
+    await advance(50);
+    await resolveStandaloneHistory(pendingStandaloneHistories[0], chatHistory([
+      user("user-1", "之前的问题"),
+      assistant("answer-1", "部分回复", "stopped")
+    ], { conversationId, hasMore: true }));
+
+    act(() => current.loadEarlier());
+    expect(standaloneLoadMock).toHaveBeenCalledTimes(2);
+    expect(standaloneLoadMock).toHaveBeenLastCalledWith(conversationId, expect.objectContaining({
+      beforeMessageId: "user-1",
+      signal: expect.any(AbortSignal)
+    }));
+    await resolveStandaloneHistory(pendingStandaloneHistories[1], chatHistory([
+      assistant("older-answer", "更早的回复")
+    ], { conversationId, hasMore: false }));
+
+    act(() => current.retry());
+    expect(pendingStreams[0].request).toEqual({
+      conversationId,
+      action: "retry",
+      messageId: "answer-1"
+    });
+    expect(loadMock).not.toHaveBeenCalled();
+  });
+
   it("StrictMode 下先读取最新历史，空历史只自动请求一次概述且不伪造消息", async () => {
     render(true, "guide.md", true);
     expect(current.isLoadingHistory).toBe(true);

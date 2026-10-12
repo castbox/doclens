@@ -1,0 +1,48 @@
+{
+  "url": "http://127.0.0.1:6771/docs",
+  "viewport": {
+    "width": 375,
+    "height": 812
+  },
+  "directoryButton": "展开目录",
+  "header": {
+    "top": 0,
+    "bottom": 94,
+    "height": 94
+  },
+  "drawers": [
+    {
+      "i": 0,
+      "rect": {
+        "x": -320,
+        "y": 94,
+        "width": 320,
+        "height": 718,
+        "top": 94,
+        "bottom": 812
+      },
+      "visibility": "hidden",
+      "transform": "matrix(1, 0, 0, 1, -320, 0)",
+      "position": "fixed"
+    },
+    {
+      "i": 1,
+      "rect": {
+        "x": 375,
+        "y": 94,
+        "width": 360,
+        "height": 718,
+        "top": 94,
+        "bottom": 812
+      },
+      "visibility": "hidden",
+      "transform": "matrix(1, 0, 0, 1, 360, 0)",
+      "position": "fixed"
+    }
+  ],
+  "docWidth": {
+    "client": 375,
+    "scroll": 375,
+    "bodyScroll": 375
+  }
+}

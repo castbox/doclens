@@ -1,5 +1,5 @@
 import { createSseParser } from "@/features/chat/domain/chatStream";
-import { parseChatPath, parseDocumentChatRequest } from "@/features/chat/domain/chatValidation";
+import { parseChatConversationId, parseChatPath, parseChatRequest } from "@/features/chat/domain/chatValidation";
 import {
   MAX_CHAT_HISTORY_PAGE_CHARS,
   MAX_CHAT_HISTORY_PAGE_MESSAGES,
@@ -8,8 +8,8 @@ import {
   type ChatHistoryPayload,
   type ChatMessage,
   type ChatMessageStatus,
-  type ChatStreamEvent,
-  type DocumentChatRequest
+  type ChatRequest,
+  type ChatStreamEvent
 } from "@/features/chat/domain/types";
 
 const MAX_RESPONSE_CHARACTERS = MAX_CHAT_MESSAGE_CHARS;
@@ -330,32 +330,23 @@ export async function loadDocumentChatHistory(
     options.signal
   );
 
-  if (options.signal.aborted) {
-    throw abortError();
-  }
+  return readHistoryPayload(response, options.signal);
+}
 
-  if (!response.ok) {
-    throw await httpError(response, options.signal);
-  }
-  if (!isJsonContentType(response)) {
-    throw new Error("聊天历史响应格式无效");
-  }
+async function readHistoryPayload(response: Response, signal: AbortSignal): Promise<ChatHistoryPayload> {
+  if (signal.aborted) throw abortError();
+  if (!response.ok) throw await httpError(response, signal);
+  if (!isJsonContentType(response)) throw new Error("聊天历史响应格式无效");
 
   let body: string | null;
   try {
-    body = await readBoundedText(response, MAX_CHAT_REQUEST_BYTES, options.signal);
+    body = await readBoundedText(response, MAX_CHAT_REQUEST_BYTES, signal);
   } catch (error) {
-    if (isAbortError(error, options.signal)) {
-      throw abortError();
-    }
+    if (isAbortError(error, signal)) throw abortError();
     throw new Error("聊天历史读取失败");
   }
-  if (options.signal.aborted) {
-    throw abortError();
-  }
-  if (body === null) {
-    throw new Error("聊天历史响应过大");
-  }
+  if (signal.aborted) throw abortError();
+  if (body === null) throw new Error("聊天历史响应过大");
 
   let value: unknown;
   try {
@@ -364,6 +355,59 @@ export async function loadDocumentChatHistory(
     throw new Error("聊天历史格式无效");
   }
   return parseChatHistory(value);
+}
+
+export async function createStandaloneChat(options: AbortOptions): Promise<ChatHistoryPayload> {
+  const response = await fetchResponse(
+    "/api/chat/conversations",
+    {
+      method: "POST",
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+      signal: options.signal
+    },
+    options.signal
+  );
+  const history = await readHistoryPayload(response, options.signal);
+  if (
+    !validId(history.conversationId) ||
+    history.messages.length !== 0 ||
+    history.isGenerating ||
+    history.documentChanged ||
+    history.hasMore
+  ) {
+    throw new ChatProtocolError("新建聊天会话响应格式无效");
+  }
+  return history;
+}
+
+export async function loadStandaloneChatHistory(
+  inputConversationId: string,
+  options: LoadDocumentChatHistoryOptions
+): Promise<ChatHistoryPayload> {
+  const conversationId = parseChatConversationId(inputConversationId);
+  const query = [`conversationId=${encodeURIComponent(conversationId)}`];
+  if (options.beforeMessageId !== undefined) {
+    if (!validId(options.beforeMessageId)) {
+      throw new Error("聊天历史分页游标无效");
+    }
+    query.push(`beforeMessageId=${encodeURIComponent(options.beforeMessageId)}`);
+  }
+  const response = await fetchResponse(
+    `/api/chat/history?${query.join("&")}`,
+    {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+      signal: options.signal
+    },
+    options.signal
+  );
+  const history = await readHistoryPayload(response, options.signal);
+  if (history.conversationId !== conversationId) {
+    throw new ChatProtocolError("聊天历史会话 ID 不匹配");
+  }
+  return history;
 }
 
 function parseChatEvent(data: string): ChatStreamEvent {
@@ -398,10 +442,11 @@ function parseChatEvent(data: string): ChatStreamEvent {
 }
 
 export async function streamDocumentChat(
-  request: DocumentChatRequest,
+  request: ChatRequest,
   options: StreamDocumentChatOptions
 ): Promise<void> {
-  const parsedRequest = parseDocumentChatRequest(request);
+  const parsedRequest = parseChatRequest(request);
+  const expectedConversationId = "conversationId" in parsedRequest ? parsedRequest.conversationId : null;
   const response = await fetchResponse(
     "/api/chat",
     {
@@ -454,6 +499,14 @@ export async function streamDocumentChat(
     }
 
     const event = parseChatEvent(data);
+    if (
+      expectedConversationId &&
+      ((event.type === "history" || event.type === "done") && event.history.conversationId !== expectedConversationId ||
+        event.type === "error" && event.history && event.history.conversationId !== expectedConversationId)
+    ) {
+      eventError = new ChatProtocolError("聊天流会话 ID 不匹配");
+      return;
+    }
     if (event.type === "history") {
       options.onHistory(event.history);
       return;

@@ -3,11 +3,14 @@ import {
   MAX_QUESTION_CHARS,
   type ChatRole,
   type ChatTurn,
-  type DocumentChatRequest
+  type ChatRequest,
+  type DocumentChatRequest,
+  type StandaloneChatRequest
 } from "./types";
 
 const MAX_CHAT_PATH_CHARS = 2_048;
 const MAX_RETRY_MESSAGE_ID_CHARS = 128;
+const MAX_CONVERSATION_ID_CHARS = 128;
 const CHAT_ROLES: ChatRole[] = ["user", "assistant"];
 
 export class ChatValidationError extends Error {
@@ -131,6 +134,73 @@ export function parseDocumentChatRequest(value: unknown): DocumentChatRequest {
   }
 
   throw new ChatValidationError("聊天操作类型无效");
+}
+
+export function parseStandaloneChatRequest(value: unknown): StandaloneChatRequest {
+  if (!isRecord(value) || !hasOwn(value, "conversationId") || !hasOwn(value, "action")) {
+    throw new ChatValidationError("独立聊天请求必须包含 conversationId 和 action");
+  }
+
+  const conversationId = parseChatConversationId(value.conversationId);
+
+  if (value.action === "send") {
+    if (!hasExactRequestKeys(value, ["conversationId", "action", "content"])) {
+      throw new ChatValidationError("独立聊天请求字段无效");
+    }
+    if (typeof value.content !== "string" || !value.content.trim()) {
+      throw new ChatValidationError("问题内容不能为空");
+    }
+    if (value.content.length > MAX_QUESTION_CHARS) {
+      throw new ChatValidationError(`每个问题不能超过 ${MAX_QUESTION_CHARS} 个字符`);
+    }
+    return { conversationId, action: "send", content: value.content };
+  }
+
+  if (value.action === "retry") {
+    if (!hasExactRequestKeys(value, ["conversationId", "action", "messageId"])) {
+      throw new ChatValidationError("独立聊天请求字段无效");
+    }
+    if (
+      typeof value.messageId !== "string" ||
+      !value.messageId.trim() ||
+      value.messageId.length > MAX_RETRY_MESSAGE_ID_CHARS ||
+      /[\u0000-\u001f\u007f-\u009f]/.test(value.messageId)
+    ) {
+      throw new ChatValidationError("重试消息 ID 无效");
+    }
+    return { conversationId, action: "retry", messageId: value.messageId };
+  }
+
+  throw new ChatValidationError("独立聊天不支持该操作");
+}
+
+export function parseChatConversationId(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    !value.trim() ||
+    value.length > MAX_CONVERSATION_ID_CHARS ||
+    !/^[A-Za-z0-9_-]+$/.test(value)
+  ) {
+    throw new ChatValidationError("聊天会话 ID 无效");
+  }
+  return value;
+}
+
+function hasExactRequestKeys(record: Record<string, unknown>, expected: string[]): boolean {
+  const keys = Object.keys(record);
+  return keys.length === expected.length && expected.every((key) => hasOwn(record, key));
+}
+
+export function parseChatRequest(value: unknown): ChatRequest {
+  if (!isRecord(value)) {
+    throw new ChatValidationError("聊天请求格式无效");
+  }
+  const hasPath = hasOwn(value, "path");
+  const hasConversationId = hasOwn(value, "conversationId");
+  if (hasPath === hasConversationId) {
+    throw new ChatValidationError("请求必须且只能指定一种聊天会话");
+  }
+  return hasConversationId ? parseStandaloneChatRequest(value) : parseDocumentChatRequest(value);
 }
 
 export function parseChatHistory(messages: unknown): ChatTurn[] {

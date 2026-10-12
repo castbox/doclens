@@ -1,0 +1,113 @@
+{
+  "url": "http://127.0.0.1:6771/docs",
+  "viewport": {
+    "width": 1200,
+    "height": 919
+  },
+  "document": {
+    "clientWidth": 1200,
+    "scrollWidth": 1200
+  },
+  "buttons": [
+    {
+      "text": "新建聊天",
+      "aria": null,
+      "disabled": false,
+      "rect": {
+        "x": 835,
+        "y": 11,
+        "width": 96,
+        "height": 44
+      }
+    },
+    {
+      "text": "展开目录",
+      "aria": null,
+      "disabled": false,
+      "rect": {
+        "x": 939,
+        "y": 11,
+        "width": 96,
+        "height": 44
+      }
+    },
+    {
+      "text": "",
+      "aria": null,
+      "disabled": false,
+      "rect": {
+        "x": -75,
+        "y": 77,
+        "width": 64,
+        "height": 31
+      }
+    },
+    {
+      "text": "",
+      "aria": null,
+      "disabled": false,
+      "rect": {
+        "x": -309,
+        "y": 125,
+        "width": 149,
+        "height": 42
+      }
+    },
+    {
+      "text": "",
+      "aria": null,
+      "disabled": false,
+      "rect": {
+        "x": -160,
+        "y": 125,
+        "width": 149,
+        "height": 42
+      }
+    },
+    {
+      "text": "",
+      "aria": "刷新最新 PR 文件",
+      "disabled": false,
+      "rect": {
+        "x": 1081,
+        "y": 77,
+        "width": 40,
+        "height": 40
+      }
+    },
+    {
+      "text": "收起",
+      "aria": null,
+      "disabled": false,
+      "rect": {
+        "x": 1125,
+        "y": 82,
+        "width": 64,
+        "height": 31
+      }
+    },
+    {
+      "text": "全部文件 0",
+      "aria": null,
+      "disabled": false,
+      "rect": {
+        "x": 851,
+        "y": 134,
+        "width": 169,
+        "height": 42
+      }
+    },
+    {
+      "text": "星标文档 0",
+      "aria": null,
+      "disabled": false,
+      "rect": {
+        "x": 1020,
+        "y": 134,
+        "width": 169,
+        "height": 42
+      }
+    }
+  ],
+  "errors": []
+}

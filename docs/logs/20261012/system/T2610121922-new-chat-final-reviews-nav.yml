@@ -1,0 +1,33 @@
+- generic [active] [ref=e1]:
+  - alert [ref=e2]
+  - generic [ref=e579]:
+    - generic [ref=e580]:
+      - generic [ref=e581]:
+        - heading "审阅单列表" [level=5] [ref=e582]
+        - paragraph [ref=e583]: 检索历史审阅记录并回到关联文档
+      - link "返回 /docs" [ref=e584] [cursor=pointer]:
+        - /url: /docs
+    - generic [ref=e585]:
+      - generic [ref=e586]:
+        - generic: 状态过滤
+        - generic [ref=e587]:
+          - textbox "状态过滤" [ref=e588]:
+            - /placeholder: 如 Approved
+          - group [aria-hidden]:
+            - generic: 状态过滤
+      - generic [ref=e589]:
+        - generic: 文档路径过滤
+        - generic [ref=e590]:
+          - textbox "文档路径过滤" [ref=e591]:
+            - /placeholder: docs/prd/doclens_prd.md
+          - group [aria-hidden]:
+            - generic: 文档路径过滤
+      - button "筛选" [ref=e592] [cursor=pointer]
+    - generic [ref=e594]:
+      - generic [ref=e595]:
+        - generic [ref=e596]:
+          - heading "星标文档" [level=6] [ref=e597]
+          - paragraph [ref=e598]: 汇总在 PR 面板或文档详情页中加入星标的文件
+        - generic [ref=e599]: 0 项
+      - paragraph [ref=e601]: 暂无星标文档。
+    - paragraph [ref=e602]: 暂无审阅单。

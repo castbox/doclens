@@ -12,6 +12,8 @@ export type ChatComposerProps = {
   onStop: () => void;
   disabled?: boolean;
   autoFocus?: boolean;
+  placeholder?: string;
+  inputLabel?: string;
 };
 
 export function ChatComposer({
@@ -19,7 +21,9 @@ export function ChatComposer({
   isStreaming,
   onStop,
   disabled = false,
-  autoFocus = false
+  autoFocus = false,
+  placeholder = "询问这份文档…",
+  inputLabel = "询问这份文档"
 }: ChatComposerProps): React.JSX.Element {
   const [draft, setDraft] = useState("");
   const hintId = useId();
@@ -83,11 +87,11 @@ export function ChatComposer({
           disabled={disabled}
           error={isOverLimit}
           inputRef={inputRef}
-          placeholder="询问这份文档…"
+          placeholder={placeholder}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={handleKeyDown}
           inputProps={{
-            "aria-label": "询问这份文档",
+            "aria-label": inputLabel,
             "aria-describedby": `${hintId} ${countId}`
           }}
           variant="standard"

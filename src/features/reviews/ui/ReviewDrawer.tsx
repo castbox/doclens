@@ -165,7 +165,8 @@ export function ReviewDrawer({
   selectedPath,
   onOpenFile,
   externalStarUpdate,
-  onStarChanged
+  onStarChanged,
+  appHeaderHeight = APP_HEADER_HEIGHT
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -173,6 +174,7 @@ export function ReviewDrawer({
   onOpenFile: (path: string) => void;
   externalStarUpdate?: PrFileStarUpdate | null;
   onStarChanged?: (path: string, isStarred: boolean, starredAt?: string | null) => void;
+  appHeaderHeight?: number;
 }): React.JSX.Element {
   const theme = useTheme();
   const isLgUp = useMediaQuery(theme.breakpoints.up("lg"));
@@ -429,8 +431,8 @@ export function ReviewDrawer({
             borderLeft: "1px solid",
             borderColor: "divider",
             bgcolor: "background.paper",
-            top: APP_HEADER_HEIGHT,
-            height: `calc(100dvh - ${APP_HEADER_HEIGHT}px)`,
+            top: appHeaderHeight,
+            height: `calc(100dvh - ${appHeaderHeight}px)`,
             display: "flex",
             flexDirection: "column"
           }
@@ -590,7 +592,7 @@ export function ReviewDrawer({
           sx={{
             position: "fixed",
             right: 10,
-            top: APP_HEADER_HEIGHT + 12,
+            top: appHeaderHeight + 12,
             zIndex: 30
           }}
         >

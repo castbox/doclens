@@ -18,11 +18,22 @@ export type DocumentChatRequest =
   | { path: string; action: "send"; content: string }
   | { path: string; action: "retry"; messageId: string };
 
+export type StandaloneChatRequest =
+  | { conversationId: string; action: "send"; content: string }
+  | { conversationId: string; action: "retry"; messageId: string };
+
+export type ChatRequest = DocumentChatRequest | StandaloneChatRequest;
+
 export type ChatDocumentIdentity = {
   docsRoot: string;
   path: string;
   repositoryPath: string;
   revision: string;
+};
+
+export type StandaloneChatIdentity = {
+  docsRoot: string;
+  conversationId: string;
 };
 
 export type ChatHistoryPayload = {
@@ -34,6 +45,8 @@ export type ChatHistoryPayload = {
 };
 
 export type ChatGeneration = {
+  scope: "document" | "standalone";
+  docsRoot: string;
   conversationId: string;
   generationId: string;
   assistantMessageId: string;

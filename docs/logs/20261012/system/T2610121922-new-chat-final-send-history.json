@@ -1,0 +1,25 @@
+{
+  "status": 200,
+  "history": {
+    "conversationId": "d14489b1-a017-42e0-a7ff-cae296c28907",
+    "messages": [
+      {
+        "id": "2f859a2f-431d-4a96-8437-13fb0aeb2e98",
+        "role": "user",
+        "content": "普通测试",
+        "status": "complete",
+        "error": null
+      },
+      {
+        "id": "dbf608fc-0d91-4863-8967-ce77201b36fa",
+        "role": "assistant",
+        "content": "本地模拟回答：新聊天可以连续提问。",
+        "status": "complete",
+        "error": null
+      }
+    ],
+    "isGenerating": false,
+    "documentChanged": false,
+    "hasMore": false
+  }
+}

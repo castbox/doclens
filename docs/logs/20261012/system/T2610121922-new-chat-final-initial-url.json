@@ -1,0 +1,9 @@
+{
+  "url": "http://127.0.0.1:6771/docs",
+  "viewport": {
+    "width": 1200,
+    "height": 919
+  },
+  "body": "DocLens\nDocs 浏览 + 搜索 + 审阅工作台\n新建聊天\n展开目录\n搜索页\n审阅列表\n请选择文件\n\n从左侧目录树选择一个文档开始预览\n\nPR 文件面板\n收起\n全部文件 0\n星标文档 0\n类别\n​\n类别\n已读状态\n全部\n已读状态\n暂无 PR 文件\n\n请检查 docs/pr 目录是否存在文件",
+  "fontStatus": "loaded"
+}

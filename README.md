@@ -36,6 +36,7 @@ DocLens 当前面向本地或内网单机使用，默认只连接一个文档根
 - 支持文档星标，星标状态与 PR 面板共享
 - 支持在详情页通过 DeepSeek 对话阅读当前文本文件：首次打开生成中文概述，重开恢复历史，可围绕文档多轮提问
 - 聊天窗口全屏展示，支持流式回答、停止、重试、Markdown 排版和移动端布局；历史按 docs 根目录与文档路径保存在 SQLite，重开可恢复
+- 顶部“新建聊天”位于目录按钮左侧，无需选择文档即可创建独立空白聊天；每次创建使用新会话 ID，发送问题后才开始生成，已有聊天记录保留。
 - 消息区独立滚动，跟随最新回复时会在内容、Mermaid 渲染、输入区或窗口高度变化后自动定位末尾；上翻阅读时保留位置，“回到底部”仅显示向下箭头图标，点击后立即定位并恢复跟随，最后一行不被输入区遮挡。
 - 回答适合描述流程、关系或状态时，优先生成一张简洁 Mermaid 图；对比、分类、映射或参数内容优先使用紧凑 Markdown 表格，简单事实短句回答。避免图表、表格和重复长文并用。
 - Mermaid 采用严格安全模式并清洗 SVG；Mermaid 块仍在流式生成时显示“正在生成图表...”占位，不频繁重绘，消息完成、停止或出错后再渲染一次。解析或安全校验失败时保留原始源码并显示提示。Markdown 表格沿用现有渲染能力，不改变聊天 API。
@@ -161,6 +162,7 @@ pnpm dev
 - 未配置 `DOCLENS_DEEPSEEK_API_KEY` 时，聊天界面会显示可读的配置错误。当前无文本提取器的 PDF 和二进制文件不支持聊天。
 - 聊天历史保存在 `DOCLENS_DB_PATH` 对应的 SQLite 中，不修改 docs，也不写入 localStorage/sessionStorage。聊天属于项目级全局状态，按 canonical docs root 与规范化文档路径隔离；关闭窗口不删除记录。
 - 每次打开先从 `/api/chat/history` 恢复历史；只有文档从未产生过聊天记录时才生成首条概述。文档发生变化时保留原历史并提示，新的提问使用服务端读取的当前文档版本。
+- 顶部新建的独立聊天以 docs 根目录与会话 ID 隔离，只参考当前会话的最近对话，不附带文档。创建和读取空聊天无需模型密钥，也不会请求模型；关闭后历史仍保存在 SQLite。
 - 同一文档的多窗口生成由 SQLite generation lease 串行化。停止、掉线、超时或进程中断会保存已生成片段和状态；重新打开只恢复，不自动重发。再次生成需用户显式点击重试。
 - 即使环境变量被错误配置，服务端仍会对路径做归一化与根目录校验。
 - `DOCLENS_SEARCH_PROVIDER` 目前只实现 `rg`；保留该变量是为了后续索引化搜索迁移。
@@ -208,8 +210,9 @@ pnpm db:migrate   # 执行数据库迁移
 | `GET` | `/api/docs/export` | `path`、`format=doc\|docx` | 导出文档详情页 |
 | `GET` | `/api/docs/stars` | `path` 可选 | 不传 `path` 返回全部星标，传 `path` 返回单文件星标状态 |
 | `PATCH` | `/api/docs/stars` | JSON: `{ "path": "...", "isStarred": true }` | 更新文档星标状态 |
-| `GET` | `/api/chat/history` | `path` 必填；`beforeMessageId` 可选 | 默认返回最新一页；以既有消息 ID 加载更早一页，不触发模型请求 |
-| `POST` | `/api/chat` | `{ "path": "...", "action": "summary" }` / `{ "path": "...", "action": "send", "content": "..." }` / `{ "path": "...", "action": "retry", "messageId": "..." }` | 服务端读取完整文档和 SQLite 历史后流式调用 DeepSeek；仅空历史可创建 summary |
+| `POST` | `/api/chat/conversations` | 无正文 | 创建独立空白聊天，返回 201 与空 `ChatHistoryPayload`，不调用模型 |
+| `GET` | `/api/chat/history` | `path` 或 `conversationId` 必须且互斥；`beforeMessageId` 可选 | 默认返回最新一页；以既有消息 ID 加载更早一页，不触发模型请求 |
+| `POST` | `/api/chat` | 文档：`{ "path": "...", "action": "summary" }` / `send` + `content` / `retry` + `messageId`；独立：`{ "conversationId": "...", "action": "send", "content": "..." }` / `retry` + `messageId` | 服务端读取对应 SQLite 历史后流式调用 DeepSeek；文档模式额外读取完整文档，独立模式不支持 summary |
 | `GET` | `/api/search` | `q` 必填；`scope`、`type=all\|md\|code\|pdf`、`page`、`size`、`sort=relevance\|mtime` | 全文搜索 |
 | `GET` | `/api/reviews` | `doc_path`、`status` 可选 | 历史审阅单列表 |
 | `GET` | `/api/reviews/:id` | `id` | 审阅单详情 |
@@ -243,6 +246,8 @@ DocLens 的 SQLite 数据只服务于工作台状态，不改变 docs 源文件�
 
 文档聊天历史通过增量兼容迁移加入，共享 `DOCLENS_DB_PATH`。`chat_conversations` 按 canonical docs root + normalized path 唯一隔离，并保存内部 `generation_id` 与 lease metadata；`chat_messages` 保存 `position` 和 `parent_message_id`。历史与 docs 源文件分离，不会写回文件。当前无账号体系，因此各窗口共享项目级历史。内部 generation/lease metadata 不属于 API 响应合同；客户端只读取 `isGenerating`。
 
+独立聊天新增 `standalone_chat_conversations` 与 `standalone_chat_messages`，按 canonical docs root 和会话 ID 隔离，复用消息状态、生成租约与持久化策略；既有文档聊天表和记录保留。当前顶部入口每次创建新会话，尚未提供独立聊天历史列表。
+
 ## 测试与冒烟
 
 ### 已有测试覆盖
@@ -270,6 +275,7 @@ DocLens 的 SQLite 数据只服务于工作台状态，不改变 docs 源文件�
 14. 分别提问流程/状态图和参数对比问题：前者适合时输出一张简洁 Mermaid 图，后者使用 Markdown 表格；流式期间显示“正在生成图表...”占位，消息完成、停止或出错后只渲染一次，语法错误或安全校验失败时源码仍可见。
 15. 确认聊天图表没有外框与标题栏，内嵌区域最高为页面高度的 1/3，竖向与横向图表在桌面、手机及横屏尺寸下均按比例完整缩放，左上角放大按钮为 44px × 44px，悬停时没有 tooltip 提示，且不遮挡图表节点；放大后大图按自然尺寸显示，可横向和纵向平移且不会缩小到视口内。确认普通文档预览仍保持原有 Mermaid 外观。
 16. 打开含 Mermaid 的长回复，等待图表完成后确认最后一行仍可见；上翻阅读后点击仅显示箭头的“回到底部”，确认滚动到实际末尾。输入多行草稿、缩小窗口或继续生成内容后仍跟随；上翻阅读时不抢滚动，操作滚动按钮时已渲染图表不重新挂载。
+17. 不选择文档，点击顶部目录按钮左侧的“新建聊天”，确认空白全屏聊天可输入，创建 / 打开不发起生成请求；关闭后再次新建，确认使用不同会话 ID，原记录保留。发送问题后验证流式回答、停止和重试；桌面及 320px / 375px 手机宽度下导航与输入区无横向溢出。
 
 ### 收尾校验
 

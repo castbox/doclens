@@ -1,0 +1,38 @@
+
+> doclens@0.1.0 test:run /private/tmp/doclens-new-chat-ijc0mive/snapshot
+> vitest run
+
+The CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.
+
+ RUN  v2.1.9 /private/tmp/doclens-new-chat-ijc0mive/snapshot
+
+ ✓ src/features/docs/domain/markdownPreviewTransform.test.ts (14 tests) 3ms
+ ✓ src/features/docs/domain/urlState.test.ts (9 tests) 3ms
+ ✓ src/features/chat/domain/chatPrompts.test.ts (3 tests) 6ms
+ ✓ src/features/chat/domain/chatValidation.test.ts (18 tests) 7ms
+ ✓ src/features/chat/services/chatClient.test.ts (14 tests) 23ms
+ ✓ src/features/docs/domain/pathRules.test.ts (6 tests) 83ms
+ ✓ src/features/chat/services/chatApiRoute.test.ts (30 tests) 18ms
+ ✓ src/features/docs/services/docsFsService.test.ts (4 tests) 38ms
+ ✓ src/features/chat/domain/chatContext.test.ts (4 tests) 3ms
+ ✓ src/features/reviews/domain/prFilesCache.test.ts (7 tests) 1ms
+ ✓ src/features/chat/domain/chatStream.test.ts (4 tests) 2ms
+ ✓ src/features/search/domain/rgParser.test.ts (3 tests) 2ms
+ ✓ src/features/docs/domain/docExport.test.ts (3 tests) 3ms
+ ✓ src/features/chat/services/chatHistoryRepo.test.ts (12 tests) 106ms
+ ✓ src/features/search/services/rgSearchService.test.ts (1 test) 65ms
+ ✓ src/features/docs/domain/mermaid.test.ts (6 tests) 1ms
+ ✓ src/features/reviews/domain/reviewStateMachine.test.ts (2 tests) 2ms
+ ✓ src/features/docs/domain/mermaidSvg.test.ts (2 tests) 60ms
+ ✓ src/features/chat/services/deepseekChatService.test.ts (21 tests) 282ms
+ ✓ src/features/chat/ui/useDocumentChat.test.ts (15 tests) 129ms
+ ✓ src/features/docs/domain/markdownSanitize.test.ts (3 tests) 12ms
+ ✓ src/features/docs/services/mermaidRenderService.test.ts (4 tests) 825ms
+   ✓ renderMermaidPngDataUrl > renders mermaid source to png data url 511ms
+ ✓ src/features/reviews/services/prFilesRepo.test.ts (7 tests) 1382ms
+   ✓ prFilesRepo 状态持久化 > PR 快照重建后仍能保留已读和星标状态 1169ms
+
+ Test Files  23 passed (23)
+      Tests  192 passed (192)
+   Start at  19:33:22
+   Duration  2.23s (transform 1.02s, setup 0ms, collect 5.37s, tests 3.06s, environment 2ms, prepare 1.24s)

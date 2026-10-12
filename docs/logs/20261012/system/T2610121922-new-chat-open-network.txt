@@ -1,0 +1,7 @@
+19. [GET] http://127.0.0.1:6771/api/docs/tree? => [200] OK
+20. [GET] http://127.0.0.1:6771/api/reviews/pr-files => [200] OK
+21. [GET] http://127.0.0.1:6771/search?_rsc=sgp6r => [200] OK
+22. [GET] http://127.0.0.1:6771/reviews?_rsc=sgp6r => [200] OK
+25. [POST] http://127.0.0.1:6771/api/chat/conversations => [400] Bad Request
+
+Note: 20 static requests not shown, run with "static" option to see them.

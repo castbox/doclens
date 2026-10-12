@@ -1,0 +1,30 @@
+- generic [active] [ref=e1]:
+  - alert [ref=e2]
+  - generic [ref=e489]:
+    - generic [ref=e490]:
+      - generic [ref=e491]:
+        - heading "全局搜索" [level=5] [ref=e492]
+        - paragraph [ref=e493]: 支持目录范围、文件类型与排序过滤
+      - link "返回 /docs" [ref=e494] [cursor=pointer]:
+        - /url: /docs
+    - generic [ref=e496]:
+      - generic [ref=e498]:
+        - generic [ref=e499]:
+          - generic [ref=e500]: 全文搜索
+          - generic [ref=e501]:
+            - textbox "全文搜索" [ref=e505]:
+              - /placeholder: 输入关键词（空格默认 AND）
+            - group [aria-hidden]
+        - generic [ref=e506]:
+          - generic [ref=e507]:
+            - generic [ref=e508]: 文件类型
+            - generic [ref=e509]
+          - generic [ref=e514]:
+            - generic [ref=e515]: 排序方式
+            - generic [ref=e516]
+      - generic [ref=e518]:
+        - paragraph [ref=e519]: 输入关键词后将实时检索文档内容，支持类型过滤和排序。
+        - generic [ref=e520]:
+          - button "worktree sop" [ref=e521] [cursor=pointer]
+          - button "upload wizard" [ref=e522] [cursor=pointer]
+          - button "unity rate limit" [ref=e523] [cursor=pointer]

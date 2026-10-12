@@ -1,0 +1,29 @@
+{
+  "url": "http://127.0.0.1:6771/docs",
+  "viewport": {
+    "width": 320,
+    "height": 812
+  },
+  "focused": true,
+  "activeElement": {
+    "tag": "BUTTON",
+    "text": "新建聊天",
+    "aria": null
+  },
+  "createButton": {
+    "found": true,
+    "disabled": false,
+    "rect": {
+      "x": 9,
+      "y": 43,
+      "width": 96,
+      "height": 44
+    }
+  },
+  "dialogOpen": false,
+  "headerHeight": 128.75,
+  "documentWidth": {
+    "client": 320,
+    "scroll": 320
+  }
+}

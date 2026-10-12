@@ -1,0 +1,48 @@
+
+> doclens@0.1.0 build /private/tmp/doclens-new-chat-ijc0mive/snapshot
+> next build
+
+  ▲ Next.js 14.2.35
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/17) ...
+   Generating static pages (4/17)
+   Generating static pages (8/17)
+   Generating static pages (12/17)
+ ✓ Generating static pages (17/17)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ○ /                                    146 B          88.9 kB
+├ ○ /_not-found                          883 B          89.6 kB
+├ ƒ /api/chat                            0 B                0 B
+├ ƒ /api/chat/conversations              0 B                0 B
+├ ƒ /api/chat/history                    0 B                0 B
+├ ƒ /api/docs/export                     0 B                0 B
+├ ƒ /api/docs/file                       0 B                0 B
+├ ƒ /api/docs/meta                       0 B                0 B
+├ ƒ /api/docs/stars                      0 B                0 B
+├ ƒ /api/docs/tree                       0 B                0 B
+├ ƒ /api/reviews                         0 B                0 B
+├ ƒ /api/reviews/[id]                    0 B                0 B
+├ ƒ /api/reviews/[id]/items/[itemId]     0 B                0 B
+├ ƒ /api/reviews/pr-files                0 B                0 B
+├ ƒ /api/reviews/pr-files/read           0 B                0 B
+├ ƒ /api/search                          0 B                0 B
+├ ○ /docs                                38 kB           213 kB
+├ ƒ /docs/view                           146 B          88.9 kB
+├ ○ /reviews                             5.18 kB         178 kB
+├ ƒ /reviews/[id]                        4.52 kB         165 kB
+└ ƒ /search                              7.71 kB         171 kB
++ First Load JS shared by all            88.7 kB
+  ├ chunks/1049-8ffe8571f76adaf3.js      31.9 kB
+  ├ chunks/ab0243a2-5f9ee3e5aef37d9f.js  53.7 kB
+  └ other shared chunks (total)          3.21 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand

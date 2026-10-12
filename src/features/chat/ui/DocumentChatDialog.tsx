@@ -24,11 +24,13 @@ export default function DocumentChatDialog({
   open,
   path,
   displayPath,
+  conversationId,
   onClose
 }: {
   open: boolean;
   path: string;
   displayPath: string;
+  conversationId?: string;
   onClose: () => void;
 }): React.JSX.Element {
   const {
@@ -47,7 +49,7 @@ export default function DocumentChatDialog({
     stop,
     retry,
     loadEarlier
-  } = useDocumentChat({ open, path });
+  } = useDocumentChat({ open, path, conversationId });
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const contentRef = React.useRef<HTMLDivElement>(null);
   const lastScrollTopRef = React.useRef(0);
@@ -61,18 +63,19 @@ export default function DocumentChatDialog({
   const followsLatestRef = React.useRef(true);
   const [showJumpToLatest, setShowJumpToLatest] = React.useState(false);
   const prefersReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)", { noSsr: true });
+  const isStandaloneChat = Boolean(conversationId);
   const pathParts = path.split(/[\\/]/).filter(Boolean);
   const documentName = pathParts[pathParts.length - 1] ?? path;
   const hasUserMessage = messages.some((message) => message.role === "user");
-  const isPreparingSummary = open && !isLoadingHistory && messages.length === 0 && !error && !isGenerating;
+  const isPreparingSummary = !isStandaloneChat && open && !isLoadingHistory && messages.length === 0 && !error && !isGenerating;
   const isRemoteGenerating = isGenerating && !isStreaming && !error;
   const isComposerDisabled = historyLoadFailed || (!isStreaming && (isLoadingHistory || isGenerating || isPreparingSummary));
   const statusMessage = isLoadingHistory
     ? ""
     : isStreaming
-      ? hasUserMessage ? "DeepSeek 正在生成回复…" : "正在阅读文档并整理摘要…"
+      ? hasUserMessage || isStandaloneChat ? "DeepSeek 正在生成回复…" : "正在阅读文档并整理摘要…"
       : isRemoteGenerating
-        ? "此文档正在另一窗口生成回复…"
+        ? isStandaloneChat ? "此聊天正在另一窗口生成回复…" : "此文档正在另一窗口生成回复…"
         : "";
 
   React.useLayoutEffect(() => {
@@ -257,33 +260,35 @@ export default function DocumentChatDialog({
           <Box sx={{ minWidth: 0, flex: 1 }}>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
               <Typography id="document-chat-title" component="h1" variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.35 }}>
-                文档对话
+                {isStandaloneChat ? "新建聊天" : "文档对话"}
               </Typography>
               <Chip label="DeepSeek" size="small" variant="outlined" color="primary" />
             </Stack>
-            <Stack
-              direction={{ xs: "column", sm: "row" }}
-              spacing={{ xs: 0, sm: 1 }}
-              alignItems={{ xs: "flex-start", sm: "baseline" }}
-              sx={{ minWidth: 0, mt: 0.35 }}
-            >
-              <Typography variant="body2" noWrap title={documentName} sx={{ minWidth: 0, maxWidth: { xs: "100%", sm: "42%" }, fontWeight: 600 }}>
-                {documentName}
-              </Typography>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                noWrap
-                title={displayPath}
-                sx={{ minWidth: 0, maxWidth: "100%", flex: 1, lineHeight: 1.35 }}
+            {!isStandaloneChat ? (
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={{ xs: 0, sm: 1 }}
+                alignItems={{ xs: "flex-start", sm: "baseline" }}
+                sx={{ minWidth: 0, mt: 0.35 }}
               >
-                {displayPath}
-              </Typography>
-            </Stack>
+                <Typography variant="body2" noWrap title={documentName} sx={{ minWidth: 0, maxWidth: { xs: "100%", sm: "42%" }, fontWeight: 600 }}>
+                  {documentName}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  noWrap
+                  title={displayPath}
+                  sx={{ minWidth: 0, maxWidth: "100%", flex: 1, lineHeight: 1.35 }}
+                >
+                  {displayPath}
+                </Typography>
+              </Stack>
+            ) : null}
           </Box>
-          <Tooltip title="关闭文档对话">
+          <Tooltip title={isStandaloneChat ? "关闭聊天" : "关闭文档对话"}>
             <IconButton
-              aria-label="关闭文档对话"
+              aria-label={isStandaloneChat ? "关闭聊天" : "关闭文档对话"}
               onClick={onClose}
               sx={{ width: 44, height: 44, flex: "0 0 auto", color: "text.secondary" }}
             >
@@ -297,7 +302,7 @@ export default function DocumentChatDialog({
         <Box
           ref={scrollRef}
           role="log"
-          aria-label="文档聊天记录"
+          aria-label={isStandaloneChat ? "聊天记录" : "文档聊天记录"}
           aria-live="off"
           onScroll={handleScroll}
           sx={{
@@ -393,6 +398,11 @@ export default function DocumentChatDialog({
                   isStreaming={isStreaming && index === messages.length - 1 && message.role === "assistant"}
                 />
               ))}
+              {isStandaloneChat && messages.length === 0 ? (
+                <Typography color="text.secondary" variant="body1" align="center" sx={{ px: 2 }}>
+                  发送消息开始聊天
+                </Typography>
+              ) : null}
               {statusMessage ? (
                 <Stack direction="row" spacing={1} alignItems="center" role="status" aria-live="polite" aria-atomic="true" sx={{ color: "text.secondary", py: 0.25 }}>
                   <CircularProgress size={14} aria-hidden="true" />
@@ -458,6 +468,8 @@ export default function DocumentChatDialog({
           onStop={stop}
           disabled={isComposerDisabled}
           autoFocus={open}
+          placeholder={isStandaloneChat ? "输入消息…" : undefined}
+          inputLabel={isStandaloneChat ? "输入消息" : undefined}
         />
         <Typography
           component="p"
@@ -465,7 +477,7 @@ export default function DocumentChatDialog({
           color="text.secondary"
           sx={{ mt: 0.75, mb: 0, textAlign: "center", lineHeight: 1.45 }}
         >
-          历史记录完整保存，回答参考当前文档与最近对话。
+          {isStandaloneChat ? "消息会发送到 DeepSeek，聊天记录完整保存并参考最近对话。" : "历史记录完整保存，回答参考当前文档与最近对话。"}
         </Typography>
       </Box>
     </Dialog>

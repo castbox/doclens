@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ChatHistoryPayload, DocumentChatRequest } from "@/features/chat/domain/types";
-import { ChatClientError, loadDocumentChatHistory, streamDocumentChat } from "./chatClient";
+import {
+  ChatClientError,
+  createStandaloneChat,
+  loadDocumentChatHistory,
+  loadStandaloneChatHistory,
+  streamDocumentChat
+} from "./chatClient";
 
 const request: DocumentChatRequest = {
   path: "guide.md",
@@ -116,6 +122,44 @@ describe("loadDocumentChatHistory", () => {
     })));
 
     await expect(loadDocumentChatHistory("guide.md", { signal: new AbortController().signal })).rejects.toThrow("响应过大");
+  });
+});
+
+describe("standalone chat client", () => {
+  it("创建空聊天时发送无正文 POST，并读取服务端生成的会话 ID", async () => {
+    const history = { ...emptyHistory, conversationId: "conversation-1" };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(history), {
+      status: 201,
+      headers: { "content-type": "application/json" }
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const controller = new AbortController();
+
+    await expect(createStandaloneChat({ signal: controller.signal })).resolves.toEqual(history);
+    expect(fetchMock).toHaveBeenCalledWith("/api/chat/conversations", expect.objectContaining({
+      method: "POST",
+      cache: "no-store",
+      signal: controller.signal
+    }));
+    expect(fetchMock.mock.calls[0]?.[1]).not.toHaveProperty("body");
+  });
+
+  it("按 conversationId 和分页游标读取独立历史", async () => {
+    const history = { ...completedHistory, conversationId: "conversation-1" };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(history), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(loadStandaloneChatHistory("conversation-1", {
+      signal: new AbortController().signal,
+      beforeMessageId: "message-2"
+    })).resolves.toEqual(history);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/chat/history?conversationId=conversation-1&beforeMessageId=message-2",
+      expect.objectContaining({ method: "GET", cache: "no-store" })
+    );
   });
 });
 

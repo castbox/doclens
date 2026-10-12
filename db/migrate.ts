@@ -193,6 +193,40 @@ async function main() {
     );
   `);
   await db.run(sql`CREATE INDEX IF NOT EXISTS chat_messages_generation_idx ON chat_messages(generation_id);`);
+
+  await db.run(sql`
+    CREATE TABLE IF NOT EXISTS standalone_chat_conversations (
+      id TEXT PRIMARY KEY NOT NULL,
+      docs_root TEXT NOT NULL,
+      doc_path TEXT,
+      repository_path TEXT,
+      last_revision TEXT,
+      active_generation_id TEXT,
+      active_revision TEXT,
+      lease_expires_at INTEGER,
+      lease_duration_ms INTEGER,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+  `);
+  await db.run(sql`
+    CREATE TABLE IF NOT EXISTS standalone_chat_messages (
+      id TEXT PRIMARY KEY NOT NULL,
+      conversation_id TEXT NOT NULL,
+      position INTEGER NOT NULL,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL,
+      error TEXT,
+      parent_message_id TEXT,
+      generation_id TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      UNIQUE(conversation_id, position),
+      FOREIGN KEY(conversation_id) REFERENCES standalone_chat_conversations(id) ON DELETE CASCADE
+    );
+  `);
+  await db.run(sql`CREATE INDEX IF NOT EXISTS standalone_chat_messages_generation_idx ON standalone_chat_messages(generation_id);`);
 }
 
 main().catch((error) => {

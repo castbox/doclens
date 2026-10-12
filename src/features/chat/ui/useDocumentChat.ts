@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChatClientError,
   loadDocumentChatHistory,
+  loadStandaloneChatHistory,
   streamDocumentChat
 } from "../services/chatClient";
 import {
   MAX_QUESTION_CHARS,
   type ChatHistoryPayload,
   type ChatMessage,
-  type DocumentChatRequest
+  type ChatRequest
 } from "../domain/types";
 
 const STRICT_MODE_SETUP_DELAY_MS = 50;
@@ -17,14 +18,17 @@ const STOPPED_MESSAGE = "已停止生成。正在同步已保存的聊天记录�
 const LOAD_HISTORY_ERROR = "无法读取聊天记录，请点击重试加载。";
 const LOAD_EARLIER_ERROR = "无法读取更早的聊天记录，请重试。";
 
-type DocumentChatSession = {
+type ChatTarget =
+  | { mode: "document"; path: string; key: string }
+  | { mode: "standalone"; conversationId: string; key: string };
+
+type ChatSession = ChatTarget & {
   id: number;
-  path: string;
 };
 
 type RenderedSession = {
   open: boolean;
-  path: string;
+  key: string;
 };
 
 type ReadHistoryOptions = {
@@ -35,6 +39,35 @@ type ReadHistoryOptions = {
 };
 
 type ReadHistory = (sessionId: number, options?: ReadHistoryOptions) => Promise<ChatHistoryPayload | null>;
+
+function chatTarget(path: string, conversationId?: string): ChatTarget {
+  return conversationId
+    ? { mode: "standalone", conversationId, key: `standalone:${conversationId}` }
+    : { mode: "document", path, key: `document:${path}` };
+}
+
+function requestForTarget(
+  target: ChatTarget,
+  request: { action: "summary" } | { action: "send"; content: string } | { action: "retry"; messageId: string }
+): ChatRequest {
+  if (target.mode === "standalone") {
+    if (request.action === "send") {
+      return { conversationId: target.conversationId, action: "send", content: request.content };
+    }
+    if (request.action === "retry") {
+      return { conversationId: target.conversationId, action: "retry", messageId: request.messageId };
+    }
+    throw new Error("独立聊天不支持自动概述");
+  }
+
+  if (request.action === "summary") {
+    return { path: target.path, action: "summary" };
+  }
+  if (request.action === "send") {
+    return { path: target.path, action: "send", content: request.content };
+  }
+  return { path: target.path, action: "retry", messageId: request.messageId };
+}
 
 function isAbortError(error: unknown): boolean {
   return typeof error === "object" && error !== null && "name" in error && error.name === "AbortError";
@@ -102,6 +135,7 @@ function mergeEarlierMessages(current: ChatMessage[], incoming: ChatMessage[]): 
 export type UseDocumentChatOptions = {
   open: boolean;
   path: string;
+  conversationId?: string;
 };
 
 export type UseDocumentChatResult = {
@@ -122,7 +156,8 @@ export type UseDocumentChatResult = {
   loadEarlier: () => void;
 };
 
-export function useDocumentChat({ open, path }: UseDocumentChatOptions): UseDocumentChatResult {
+export function useDocumentChat({ open, path, conversationId }: UseDocumentChatOptions): UseDocumentChatResult {
+  const target = useMemo(() => chatTarget(path, conversationId), [conversationId, path]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(open);
   const [isLoadingEarlier, setIsLoadingEarlier] = useState(false);
@@ -135,8 +170,8 @@ export function useDocumentChat({ open, path }: UseDocumentChatOptions): UseDocu
 
   const messagesRef = useRef<ChatMessage[]>([]);
   const historyRef = useRef<ChatHistoryPayload | null>(null);
-  const sessionRef = useRef<DocumentChatSession | null>(null);
-  const renderedSessionRef = useRef<RenderedSession>({ open, path });
+  const sessionRef = useRef<ChatSession | null>(null);
+  const renderedSessionRef = useRef<RenderedSession>({ open, key: target.key });
   const historySessionIdRef = useRef<number | null>(null);
   const sessionSequenceRef = useRef(0);
   const historySequenceRef = useRef(0);
@@ -160,7 +195,7 @@ export function useDocumentChat({ open, path }: UseDocumentChatOptions): UseDocu
 
   // Track current props during render so callbacks from an old path are ignored
   // before React runs the previous effect's cleanup.
-  renderedSessionRef.current = { open, path };
+  renderedSessionRef.current = { open, key: target.key };
 
   const setCurrentError = useCallback((value: string | null) => {
     errorRef.current = value;
@@ -177,7 +212,7 @@ export function useDocumentChat({ open, path }: UseDocumentChatOptions): UseDocu
   const isCurrentSession = useCallback((sessionId: number): boolean => {
     const session = sessionRef.current;
     const rendered = renderedSessionRef.current;
-    return Boolean(session && session.id === sessionId && rendered.open && rendered.path === session.path);
+    return Boolean(session && session.id === sessionId && rendered.open && rendered.key === session.key);
   }, []);
 
   const applyHistory = useCallback(
@@ -250,7 +285,7 @@ export function useDocumentChat({ open, path }: UseDocumentChatOptions): UseDocu
   );
 
   const startStream = useCallback(
-    (sessionId: number, request: DocumentChatRequest): boolean => {
+    (sessionId: number, request: ChatRequest): boolean => {
       const session = sessionRef.current;
       if (
         !session ||
@@ -351,7 +386,9 @@ export function useDocumentChat({ open, path }: UseDocumentChatOptions): UseDocu
       }
 
       summaryStartedRef.current = true;
-      return startStream(sessionId, { path: session.path, action: "summary" });
+      return session.mode === "document"
+        ? startStream(sessionId, requestForTarget(session, { action: "summary" }))
+        : false;
     },
     [isCurrentSession, startStream]
   );
@@ -384,7 +421,10 @@ export function useDocumentChat({ open, path }: UseDocumentChatOptions): UseDocu
       }
 
       try {
-        const payload = await loadDocumentChatHistory(session.path, { signal: controller.signal });
+        const historyOptions = { signal: controller.signal };
+        const payload = session.mode === "standalone"
+          ? await loadStandaloneChatHistory(session.conversationId, historyOptions)
+          : await loadDocumentChatHistory(session.path, historyOptions);
         if (
           !isCurrentSession(sessionId) ||
           historySequenceRef.current !== readId ||
@@ -463,7 +503,7 @@ export function useDocumentChat({ open, path }: UseDocumentChatOptions): UseDocu
 
   useEffect(() => {
     const sessionId = ++sessionSequenceRef.current;
-    sessionRef.current = open ? { id: sessionId, path } : null;
+    sessionRef.current = open ? { ...target, id: sessionId } : null;
     historyRef.current = null;
     historySessionIdRef.current = null;
     historyLoadedRef.current = false;
@@ -504,7 +544,10 @@ export function useDocumentChat({ open, path }: UseDocumentChatOptions): UseDocu
       // setup's timer a chance to be cancelled before any network request starts.
       beginTimer = setTimeout(() => {
         if (isCurrentSession(sessionId)) {
-          void readHistoryOnce(sessionId, { showLoading: true, autoStartSummary: true });
+          void readHistoryOnce(sessionId, {
+            showLoading: true,
+            autoStartSummary: target.mode === "document"
+          });
         }
       }, STRICT_MODE_SETUP_DELAY_MS);
     }
@@ -527,7 +570,7 @@ export function useDocumentChat({ open, path }: UseDocumentChatOptions): UseDocu
         earlierController?.abort();
       }
     };
-  }, [open, path, clearPollTimer, isCurrentSession, readHistoryOnce, setCurrentError]);
+  }, [open, target, clearPollTimer, isCurrentSession, readHistoryOnce, setCurrentError]);
 
   const send = useCallback(
     (content: string): boolean => {
@@ -562,7 +605,7 @@ export function useDocumentChat({ open, path }: UseDocumentChatOptions): UseDocu
         return false;
       }
 
-      return startStream(session.id, { path: session.path, action: "send", content: question });
+      return startStream(session.id, requestForTarget(session, { action: "send", content: question }));
     },
     [isCurrentSession, setCurrentError, startStream]
   );
@@ -601,7 +644,10 @@ export function useDocumentChat({ open, path }: UseDocumentChatOptions): UseDocu
 
     if (historyLoadFailedRef.current) {
       setCurrentError(null);
-      void readHistoryRef.current?.(session.id, { showLoading: true, autoStartSummary: true });
+      void readHistoryRef.current?.(session.id, {
+        showLoading: true,
+        autoStartSummary: session.mode === "document"
+      });
       return;
     }
 
@@ -610,11 +656,7 @@ export function useDocumentChat({ open, path }: UseDocumentChatOptions): UseDocu
       return;
     }
 
-    startStream(session.id, {
-      path: session.path,
-      action: "retry",
-      messageId: retryable.id
-    });
+    startStream(session.id, requestForTarget(session, { action: "retry", messageId: retryable.id }));
   }, [isCurrentSession, setCurrentError, startStream]);
 
   const loadEarlier = useCallback(() => {
@@ -638,10 +680,15 @@ export function useDocumentChat({ open, path }: UseDocumentChatOptions): UseDocu
     setIsLoadingEarlier(true);
     setLoadEarlierError(null);
 
-    void loadDocumentChatHistory(session.path, {
+    const historyOptions = {
       signal: controller.signal,
       beforeMessageId: firstMessage.id
-    })
+    };
+    const historyRequest = session.mode === "standalone"
+      ? loadStandaloneChatHistory(session.conversationId, historyOptions)
+      : loadDocumentChatHistory(session.path, historyOptions);
+
+    void historyRequest
       .then((payload) => {
         if (
           !isCurrentSession(session.id) ||
@@ -682,23 +729,23 @@ export function useDocumentChat({ open, path }: UseDocumentChatOptions): UseDocu
   }, [applyHistory, isCurrentSession]);
 
   const session = sessionRef.current;
-  const sessionMatchesCurrentPath = Boolean(
-    open && session && session.path === path && renderedSessionRef.current.path === session.path
+  const sessionMatchesCurrentTarget = Boolean(
+    open && session && session.key === target.key && renderedSessionRef.current.key === session.key
   );
   const historyBelongsToSession = Boolean(
-    sessionMatchesCurrentPath &&
+    sessionMatchesCurrentTarget &&
       session &&
       historySessionIdRef.current === session.id &&
       historyLoadedRef.current
   );
   const visibleLoadingHistory = open && (
-    (!historyBelongsToSession && !(sessionMatchesCurrentPath && historyLoadFailedRef.current)) || isLoadingHistory
+    (!historyBelongsToSession && !(sessionMatchesCurrentTarget && historyLoadFailedRef.current)) || isLoadingHistory
   );
   const visibleMessages = historyBelongsToSession ? messages : [];
-  const visibleIsStreaming = sessionMatchesCurrentPath && isStreaming;
+  const visibleIsStreaming = sessionMatchesCurrentTarget && isStreaming;
   const visibleIsGenerating = historyBelongsToSession && isGenerating;
   const visibleDocumentChanged = historyBelongsToSession && documentChanged;
-  const visibleError = sessionMatchesCurrentPath ? error : null;
+  const visibleError = sessionMatchesCurrentTarget ? error : null;
   const canRetry = Boolean(
     visibleError &&
       !visibleIsStreaming &&
@@ -709,9 +756,9 @@ export function useDocumentChat({ open, path }: UseDocumentChatOptions): UseDocu
   return {
     messages: visibleMessages,
     isLoadingHistory: visibleLoadingHistory,
-    historyLoadFailed: sessionMatchesCurrentPath && historyLoadFailedRef.current,
-    isLoadingEarlier: sessionMatchesCurrentPath && isLoadingEarlier,
-    loadEarlierError: sessionMatchesCurrentPath ? loadEarlierError : null,
+    historyLoadFailed: sessionMatchesCurrentTarget && historyLoadFailedRef.current,
+    isLoadingEarlier: sessionMatchesCurrentTarget && isLoadingEarlier,
+    loadEarlierError: sessionMatchesCurrentTarget ? loadEarlierError : null,
     hasMore: historyBelongsToSession && hasMore,
     isStreaming: visibleIsStreaming,
     isGenerating: visibleIsGenerating,

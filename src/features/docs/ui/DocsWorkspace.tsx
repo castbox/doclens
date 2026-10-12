@@ -1,11 +1,14 @@
 "use client";
 
 import * as React from "react";
+import AddCommentOutlinedIcon from "@mui/icons-material/AddCommentOutlined";
 import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
-import { AppBar, Box, Button, Container, Divider, Drawer, Paper, Stack, Tab, Tabs, Toolbar, Typography, useMediaQuery } from "@mui/material";
+import { Alert, AppBar, Box, Button, CircularProgress, Container, Divider, Drawer, Paper, Snackbar, Stack, Tab, Tabs, Toolbar, Typography, useMediaQuery } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { createStandaloneChat } from "@/features/chat/services/chatClient";
 import { parseLocationAnchor, stripPathAnchor } from "@/features/docs/domain/anchor";
 import { isPrDocsPath } from "@/features/docs/domain/pathAliases";
 import { isPathWithinScope, normalizeDocsRouteState, type DocsNodeType } from "@/features/docs/domain/urlState";
@@ -19,6 +22,7 @@ import { ReviewDrawer } from "@/features/reviews/ui/ReviewDrawer";
 const DOCS_DRAWER_WIDTH = 320;
 const REVIEW_DRAWER_WIDTH = 360;
 const APP_HEADER_HEIGHT = 64;
+const DocumentChatDialog = dynamic(() => import("@/features/chat/ui/DocumentChatDialog"), { ssr: false });
 type DocsDrawerTab = "tree" | "starred";
 type ResolvedPathMeta = {
   path: string;
@@ -44,11 +48,98 @@ export function DocsWorkspace(): React.JSX.Element {
   const [docsDrawerTab, setDocsDrawerTab] = React.useState<DocsDrawerTab>("tree");
   const [reviewDrawerOpen, setReviewDrawerOpen] = React.useState(false);
   const [chatVisible, setChatVisible] = React.useState(false);
+  const [standaloneChatConversationId, setStandaloneChatConversationId] = React.useState<string | null>(null);
+  const [isCreatingStandaloneChat, setIsCreatingStandaloneChat] = React.useState(false);
+  const [standaloneChatCreateError, setStandaloneChatCreateError] = React.useState<string | null>(null);
   const [docStarRefreshToken, setDocStarRefreshToken] = React.useState(0);
   const [latestDocStarUpdate, setLatestDocStarUpdate] = React.useState<DocStarUpdate | null>(null);
   const [latestPrStarUpdate, setLatestPrStarUpdate] = React.useState<PrFileStarUpdate | null>(null);
   const pathTypeCacheRef = React.useRef<Map<string, ResolvedPathMeta>>(new Map());
   const latestReadPath = React.useRef("");
+  const createChatInFlightRef = React.useRef(false);
+  const createChatControllerRef = React.useRef<AbortController | null>(null);
+  const newChatButtonRef = React.useRef<HTMLButtonElement | null>(null);
+  const focusRestoreFrameRef = React.useRef<number | null>(null);
+  const appBarRef = React.useRef<HTMLElement | null>(null);
+  const [appHeaderHeight, setAppHeaderHeight] = React.useState(APP_HEADER_HEIGHT);
+  const anyChatVisible = chatVisible || Boolean(standaloneChatConversationId);
+
+  React.useEffect(() => () => {
+    createChatControllerRef.current?.abort();
+  }, []);
+
+  React.useEffect(() => () => {
+    if (focusRestoreFrameRef.current !== null) {
+      window.cancelAnimationFrame(focusRestoreFrameRef.current);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    const appBar = appBarRef.current;
+    if (!appBar) {
+      return;
+    }
+
+    const updateHeaderHeight = () => {
+      setAppHeaderHeight(Math.ceil(appBar.getBoundingClientRect().height));
+    };
+    updateHeaderHeight();
+
+    if (typeof ResizeObserver !== "undefined") {
+      const observer = new ResizeObserver(updateHeaderHeight);
+      observer.observe(appBar);
+      return () => observer.disconnect();
+    }
+
+    window.addEventListener("resize", updateHeaderHeight);
+    return () => window.removeEventListener("resize", updateHeaderHeight);
+  }, []);
+
+  const handleCreateStandaloneChat = React.useCallback(async () => {
+    if (createChatInFlightRef.current) {
+      return;
+    }
+
+    createChatInFlightRef.current = true;
+    const controller = new AbortController();
+    createChatControllerRef.current = controller;
+    setIsCreatingStandaloneChat(true);
+    setStandaloneChatCreateError(null);
+
+    try {
+      const history = await createStandaloneChat({ signal: controller.signal });
+      if (controller.signal.aborted) {
+        return;
+      }
+      if (!history.conversationId) {
+        throw new Error("missing conversation id");
+      }
+      setStandaloneChatConversationId(history.conversationId);
+    } catch {
+      if (!controller.signal.aborted) {
+        setStandaloneChatCreateError("新建聊天失败，请稍后重试。");
+      }
+    } finally {
+      if (createChatControllerRef.current === controller) {
+        createChatControllerRef.current = null;
+      }
+      createChatInFlightRef.current = false;
+      if (!controller.signal.aborted) {
+        setIsCreatingStandaloneChat(false);
+      }
+    }
+  }, []);
+
+  const handleCloseStandaloneChat = React.useCallback(() => {
+    setStandaloneChatConversationId(null);
+    if (focusRestoreFrameRef.current !== null) {
+      window.cancelAnimationFrame(focusRestoreFrameRef.current);
+    }
+    focusRestoreFrameRef.current = window.requestAnimationFrame(() => {
+      focusRestoreFrameRef.current = null;
+      newChatButtonRef.current?.focus();
+    });
+  }, []);
 
   const getPathMeta = React.useCallback(async (path: string, signal: AbortSignal): Promise<ResolvedPathMeta | null> => {
     const cached = pathTypeCacheRef.current.get(path);
@@ -292,6 +383,7 @@ export function DocsWorkspace(): React.JSX.Element {
   return (
     <Box sx={{ minHeight: "100dvh" }}>
       <AppBar
+        ref={appBarRef}
         position="sticky"
         color="transparent"
         elevation={0}
@@ -302,18 +394,30 @@ export function DocsWorkspace(): React.JSX.Element {
           bgcolor: "rgba(243,247,251,0.86)"
         }}
       >
-        <Toolbar sx={{ minHeight: `${APP_HEADER_HEIGHT}px !important`, px: { xs: 1, md: 1.5 } }}>
-          <Stack direction="row" alignItems="center" justifyContent="space-between" width="100%" gap={1} flexWrap="wrap">
-            <Stack direction="row" alignItems="center" gap={1.2}>
+        <Toolbar sx={{ minHeight: `${APP_HEADER_HEIGHT}px !important`, px: { xs: 1, md: 1.5 }, py: { xs: 0.75, md: 0 } }}>
+          <Stack direction={{ xs: "column", md: "row" }} alignItems={{ xs: "stretch", md: "center" }} justifyContent="space-between" width="100%" gap={{ xs: 0.5, md: 1 }} sx={{ minWidth: 0 }}>
+            <Stack direction="row" alignItems="center" gap={1.2} sx={{ minWidth: 0 }}>
               <Typography variant="h6" fontWeight={800} letterSpacing="-0.02em">
                 DocLens
               </Typography>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" color="text.secondary" sx={{ display: { xs: "none", sm: "block" } }}>
                 Docs 浏览 + 搜索 + 审阅工作台
               </Typography>
             </Stack>
 
-            <Stack direction="row" gap={1} flexWrap="wrap">
+            <Stack direction="row" gap={{ xs: 0.5, sm: 1 }} flexWrap="wrap" sx={{ minWidth: 0 }}>
+              <Button
+                ref={newChatButtonRef}
+                size="small"
+                variant="outlined"
+                startIcon={isCreatingStandaloneChat ? <CircularProgress size={14} color="inherit" /> : <AddCommentOutlinedIcon />}
+                onClick={() => void handleCreateStandaloneChat()}
+                disabled={isCreatingStandaloneChat}
+                aria-haspopup="dialog"
+                sx={{ minHeight: 44, whiteSpace: "nowrap" }}
+              >
+                {isCreatingStandaloneChat ? "正在创建…" : "新建聊天"}
+              </Button>
               <Button
                 size="small"
                 variant={docsDrawerOpen ? "contained" : "outlined"}
@@ -335,7 +439,7 @@ export function DocsWorkspace(): React.JSX.Element {
 
       <Drawer
         anchor="left"
-        open={docsDrawerOpen && !chatVisible}
+        open={docsDrawerOpen && !anyChatVisible}
         onClose={() => setDocsDrawerOpen(false)}
         variant={isMdUp ? "persistent" : "temporary"}
         ModalProps={{ keepMounted: true }}
@@ -349,8 +453,8 @@ export function DocsWorkspace(): React.JSX.Element {
             borderRight: "1px solid",
             borderColor: "divider",
             bgcolor: "background.paper",
-            top: APP_HEADER_HEIGHT,
-            height: `calc(100dvh - ${APP_HEADER_HEIGHT}px)`,
+            top: appHeaderHeight,
+            height: `calc(100dvh - ${appHeaderHeight}px)`,
             display: "flex",
             flexDirection: "column"
           }
@@ -434,8 +538,9 @@ export function DocsWorkspace(): React.JSX.Element {
       </Container>
 
       <ReviewDrawer
-        open={reviewDrawerOpen && !chatVisible}
+        open={reviewDrawerOpen && !anyChatVisible}
         onOpenChange={setReviewDrawerOpen}
+        appHeaderHeight={appHeaderHeight}
         selectedPath={selectedPath}
         externalStarUpdate={latestPrStarUpdate}
         onOpenFile={(path) => {
@@ -445,6 +550,28 @@ export function DocsWorkspace(): React.JSX.Element {
           handleDocStarChanged(path, isStarred, starredAt);
         }}
       />
+
+      {standaloneChatConversationId ? (
+        <DocumentChatDialog
+          key={`standalone:${standaloneChatConversationId}`}
+          open
+          path=""
+          displayPath=""
+          conversationId={standaloneChatConversationId}
+          onClose={handleCloseStandaloneChat}
+        />
+      ) : null}
+
+      <Snackbar
+        open={Boolean(standaloneChatCreateError)}
+        autoHideDuration={5000}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+        onClose={() => setStandaloneChatCreateError(null)}
+      >
+        <Alert severity="error" variant="filled" role="alert" onClose={() => setStandaloneChatCreateError(null)}>
+          {standaloneChatCreateError}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

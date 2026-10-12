@@ -1,0 +1,50 @@
+{
+  "status": 200,
+  "conversationId": "d14489b1-a017-42e0-a7ff-cae296c28907",
+  "isGenerating": false,
+  "messages": [
+    {
+      "role": "user",
+      "status": "complete",
+      "content": "普通测试",
+      "error": null
+    },
+    {
+      "role": "assistant",
+      "status": "complete",
+      "content": "本地模拟回答：新聊天可以连续提问。",
+      "error": null
+    },
+    {
+      "role": "user",
+      "status": "complete",
+      "content": "停止测试",
+      "error": null
+    },
+    {
+      "role": "assistant",
+      "status": "stopped",
+      "content": "这是本地模拟的回复，第 1 段。第 2 段。第 3 段。第 4 段。第 5 段。第 6 段。第 7 段。第 8 段。第 9 段。第 10 段。第 11 段。第 12 段。第 13 段。第 14 段。第 15 段。第 16 段。第 17 段。第 18 段。第 19 段。第 20 段。第 21 段。第 22 段。第 23 段。第 24 段。第 25 段。第 26 段。第 27 段。第 28 段。第 29 段。第 30 段。第 31 段。第 32 段。第 33 段。第 34 段。第 35 段。第 36 段。第 37 段。第 38 段。第 39 段。第 40 段。第 41 段。第 42 段。第 43 段。第 44 段。第 45 段。第 46 段。第 47 段。第 48 段。第 49 段。第 50 段。第 51 段。第 52 段。第 53 段。第 54 段。第 55 段。第 56 段。第 57 段。第 58 段。第 59 段。第 60 段。第 61 段。第 62 段。第 63 段。第 64 段。第 65 段。",
+      "error": null
+    },
+    {
+      "role": "user",
+      "status": "complete",
+      "content": "重试测试",
+      "error": null
+    },
+    {
+      "role": "assistant",
+      "status": "error",
+      "content": "",
+      "error": "DeepSeek 服务暂时不可用，请稍后重试。"
+    },
+    {
+      "role": "assistant",
+      "status": "complete",
+      "content": "本地模拟回答：重试成功，历史保留。",
+      "error": null
+    }
+  ],
+  "userMessageCount": 3
+}

@@ -1,0 +1,18 @@
+{
+  "url": "http://127.0.0.1:6771/docs",
+  "viewport": {
+    "width": 1200,
+    "height": 919
+  },
+  "log": {
+    "exists": false
+  },
+  "input": {
+    "exists": false,
+    "focused": false
+  },
+  "window": {
+    "width": 1200,
+    "scrollWidth": 1200
+  }
+}

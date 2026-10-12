@@ -1,0 +1,10 @@
+{
+  "status": 200,
+  "history": {
+    "conversationId": "a08fa0f1-d681-4241-a6b4-f4983a19d3c7",
+    "messages": [],
+    "isGenerating": false,
+    "documentChanged": false,
+    "hasMore": false
+  }
+}

@@ -1,0 +1,33 @@
+- generic [active] [ref=e1] [box=0,0,1200,919]:
+  - alert [ref=e2] [box=-1,-1,1,1]
+  - generic [ref=e3] [box=0,0,1200,919]:
+    - banner [ref=e4] [box=0,0,1200,66]:
+      - generic [ref=e6] [box=13,11,1174,44]:
+        - generic [ref=e7] [box=13,17,249,32]:
+          - heading "DocLens" [level=6] [ref=e8] [box=13,17,76,32]
+          - generic [ref=e9] [box=99,23,163,20]: Docs 浏览 + 搜索 + 审阅工作台
+        - generic [ref=e10] [box=835,11,352,44]:
+          - button "新建聊天" [ref=e11] [cursor=pointer] [box=835,11,96,44]
+          - button "展开目录" [ref=e15] [cursor=pointer] [box=939,11,96,44]
+          - link "搜索页" [ref=e20] [cursor=pointer] [box=1043,11,64,44]:
+            - /url: /search
+          - link "审阅列表" [ref=e21] [cursor=pointer] [box=1115,11,72,44]:
+            - /url: /reviews
+    - generic [ref=e25] [box=23,87,786,106]:
+      - heading "请选择文件" [level=6] [ref=e26] [box=48,112,736,28]
+      - paragraph [ref=e27] [box=48,146,736,22]: 从左侧目录树选择一个文档开始预览
+    - generic [ref=e28] [box=840,66,360,853]:
+      - generic [ref=e29] [box=851,77,338,153]:
+        - generic [ref=e30] [box=851,77,338,40]:
+          - heading "PR 文件面板" [level=6] [ref=e31] [box=851,83,89,28]
+          - generic [ref=e32] [box=1081,77,108,40]
+        - separator [ref=e35] [box=851,125,338,1]
+        - tablist [ref=e38] [box=851,134,338,42]:
+          - tab "全部文件 0" [selected] [ref=e39] [cursor=pointer] [box=851,134,169,42]
+          - tab "星标文档 0" [ref=e40] [cursor=pointer] [box=1020,134,169,42]
+        - generic [ref=e42] [box=851,184,338,40]:
+          - generic [ref=e43] [box=851,184,140,40]
+          - generic [ref=e46] [box=997,184,130,40]
+      - generic [ref=e59] [box=851,230,335,106]:
+        - heading "暂无 PR 文件" [level=6] [ref=e60] [box=876,255,285,28]
+        - paragraph [ref=e61] [box=876,289,285,22]: 请检查 docs/pr 目录是否存在文件

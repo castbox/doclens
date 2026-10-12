@@ -10,7 +10,14 @@ import {
   type ChatStreamEvent,
   type DocumentChatRequest
 } from "@/features/chat/domain/types";
-import { ChatServiceError, openDocumentChat, readDocumentChatHistory } from "./deepseekChatService";
+import {
+  ChatServiceError,
+  createStandaloneChatConversation,
+  openDocumentChat,
+  openStandaloneChat,
+  readDocumentChatHistory,
+  readStandaloneChatHistory
+} from "./deepseekChatService";
 import { clearConfigCache } from "@/shared/utils/env";
 
 const TEST_API_KEY = "UNIT_TEST_KEY_SENTINEL";
@@ -163,6 +170,44 @@ describe("openDocumentChat SQLite 历史、安全与 DeepSeek 流", () => {
       tempRoot = "";
       docsRoot = "";
     }
+  });
+
+  it("无 API key 时可创建空独立会话；显式发送后用 mock SSE 持久化回答", async () => {
+    const fetchMock = vi.mocked(fetch);
+    vi.stubEnv("DOCLENS_DEEPSEEK_API_KEY", "");
+
+    const empty = await createStandaloneChatConversation();
+
+    expect(empty).toMatchObject({
+      conversationId: expect.any(String),
+      messages: [],
+      isGenerating: false,
+      documentChanged: false,
+      hasMore: false
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    vi.stubEnv("DOCLENS_DEEPSEEK_API_KEY", TEST_API_KEY);
+    fetchMock.mockResolvedValueOnce(upstreamResponse(completedAnswer("这是独立聊天的 mock 回复。")));
+    const stream = await openStandaloneChat({
+      conversationId: empty.conversationId!,
+      action: "send",
+      content: "请介绍你能做什么"
+    }, new AbortController().signal);
+    const events = parseEvents(await readTextWithTimeout(stream));
+    const [, init] = fetchMock.mock.calls[0] ?? [];
+    const body = JSON.parse(String(init?.body)) as { messages: Array<{ role: string; content: string }> };
+
+    expect(events.map((event) => event.type)).toEqual(["history", "delta", "done"]);
+    expect(body.messages[0]?.role).toBe("system");
+    expect(body.messages[1]).toMatchObject({ role: "user", content: "请介绍你能做什么" });
+    expect(JSON.stringify(body.messages)).not.toContain("核心内容是服务器读取的正文");
+    expect(JSON.stringify(body.messages)).not.toContain("请用简洁易懂的中文概述当前文档主题");
+
+    const saved = await readStandaloneChatHistory(empty.conversationId!);
+    expect(saved.conversationId).toBe(empty.conversationId);
+    expect(saved.messages.map((message) => message.content)).toEqual(["请介绍你能做什么", "这是独立聊天的 mock 回复。"]);
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   it("用 SQLite 持久化概述，delta 带对应助手 ID，完成后可恢复且恢复不调用 provider", async () => {

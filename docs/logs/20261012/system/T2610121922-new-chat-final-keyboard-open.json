@@ -1,0 +1,7 @@
+{
+  "dialog": true,
+  "inputFocused": true,
+  "createDisabled": false,
+  "createLabel": "新建聊天",
+  "activeTag": "TEXTAREA"
+}

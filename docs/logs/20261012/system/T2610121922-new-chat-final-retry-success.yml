@@ -1,0 +1,64 @@
+- generic [ref=e1]:
+  - alert [ref=e2]
+  - generic [aria-hidden] [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e6]:
+        - generic [ref=e7]:
+          - heading [level=6] [ref=e106]: DocLens
+          - generic [ref=e9]: Docs 浏览 + 搜索 + 审阅工作台
+        - generic [ref=e10]:
+          - button [ref=e107] [cursor=pointer]: 新建聊天
+          - button [ref=e110] [cursor=pointer]: 展开目录
+          - link [ref=e111] [cursor=pointer]:
+            - /url: /search
+            - text: 搜索页
+          - link [ref=e112] [cursor=pointer]:
+            - /url: /reviews
+            - text: 审阅列表
+    - generic [ref=e25]:
+      - heading [level=6] [ref=e113]: 请选择文件
+      - paragraph [ref=e27]: 从左侧目录树选择一个文档开始预览
+    - generic: 类别
+    - generic: 已读状态
+    - button [ref=e115] [cursor=pointer]: 打开 PR 面板
+  - dialog [ref=e121]:
+    - banner [ref=e122]:
+      - generic [ref=e123]:
+        - generic [ref=e125]:
+          - heading "新建聊天" [level=1] [ref=e126]
+          - generic [ref=e127]: DeepSeek
+        - button "关闭聊天" [ref=e129] [cursor=pointer]
+    - main [ref=e132]:
+      - log "聊天记录" [ref=e133]:
+        - generic [ref=e134]:
+          - article "你的消息" [ref=e199]:
+            - generic [ref=e200]: 普通测试
+          - article "DeepSeek 回复" [ref=e202]:
+            - heading "DeepSeek" [level=6] [ref=e207]
+            - paragraph [ref=e210]: 本地模拟回答：新聊天可以连续提问。
+          - article "你的消息" [ref=e211]:
+            - generic [ref=e212]: 停止测试
+          - article "DeepSeek 回复" [ref=e214]:
+            - generic [ref=e215]:
+              - heading "DeepSeek" [level=6] [ref=e219]
+              - generic [ref=e220]: 已停止生成
+            - paragraph [ref=e224]: 这是本地模拟的回复，第 1 段。第 2 段。第 3 段。第 4 段。第 5 段。第 6 段。第 7 段。第 8 段。第 9 段。第 10 段。第 11 段。第 12 段。第 13 段。第 14 段。第 15 段。第 16 段。第 17 段。第 18 段。第 19 段。第 20 段。第 21 段。第 22 段。第 23 段。第 24 段。第 25 段。第 26 段。第 27 段。第 28 段。第 29 段。第 30 段。第 31 段。第 32 段。第 33 段。第 34 段。第 35 段。第 36 段。第 37 段。第 38 段。第 39 段。第 40 段。第 41 段。第 42 段。第 43 段。第 44 段。第 45 段。第 46 段。第 47 段。第 48 段。第 49 段。第 50 段。第 51 段。第 52 段。第 53 段。第 54 段。第 55 段。第 56 段。第 57 段。第 58 段。第 59 段。第 60 段。第 61 段。第 62 段。第 63 段。第 64 段。第 65 段。
+          - article "你的消息" [ref=e225]:
+            - generic [ref=e226]: 重试测试
+          - article "DeepSeek 回复" [ref=e228]:
+            - generic [ref=e229]:
+              - heading "DeepSeek" [level=6] [ref=e233]
+              - generic [ref=e234]: 生成中断
+          - article "DeepSeek 回复" [ref=e243]:
+            - heading "DeepSeek" [level=6] [ref=e248]
+            - paragraph [ref=e251]: 本地模拟回答：重试成功，历史保留。
+    - contentinfo [ref=e136]:
+      - generic [ref=e138]:
+        - textbox "输入消息" [ref=e141]:
+          - /placeholder: 输入消息…
+        - generic [ref=e142]:
+          - generic [ref=e143]: Enter 发送 · Shift + Enter 换行
+          - generic [ref=e144]:
+            - generic [ref=e145]: 0 / 4000
+            - button "发送消息" [disabled]
+      - paragraph [ref=e146]: 消息会发送到 DeepSeek，聊天记录完整保存并参考最近对话。

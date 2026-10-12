@@ -10,16 +10,30 @@ vi.mock("@/features/chat/services/deepseekChatService", () => ({
     }
   },
   openDocumentChat: vi.fn(),
+  openStandaloneChat: vi.fn(),
+  createStandaloneChatConversation: vi.fn(),
+  readStandaloneChatHistory: vi.fn(),
   readDocumentChatHistory: vi.fn()
 }));
 
 import { POST } from "../../../../app/api/chat/route";
 import { GET as GET_HISTORY } from "../../../../app/api/chat/history/route";
-import { ChatServiceError, openDocumentChat, readDocumentChatHistory } from "@/features/chat/services/deepseekChatService";
+import { POST as CREATE_CONVERSATION } from "../../../../app/api/chat/conversations/route";
+import {
+  ChatServiceError,
+  createStandaloneChatConversation,
+  openDocumentChat,
+  openStandaloneChat,
+  readDocumentChatHistory,
+  readStandaloneChatHistory
+} from "@/features/chat/services/deepseekChatService";
 import { PathSecurityError } from "@/features/docs/domain/pathRules";
 
 const openDocumentChatMock = vi.mocked(openDocumentChat);
+const openStandaloneChatMock = vi.mocked(openStandaloneChat);
+const createStandaloneChatMock = vi.mocked(createStandaloneChatConversation);
 const readHistoryMock = vi.mocked(readDocumentChatHistory);
+const readStandaloneHistoryMock = vi.mocked(readStandaloneChatHistory);
 const sameOrigin = "https://doclens.example";
 const historyPayload = {
   conversationId: null,
@@ -69,6 +83,24 @@ function requestBytes(body: Uint8Array): Request {
   });
 }
 
+function requestWithBodyStream(chunks: Uint8Array[], onCancel?: () => void, close = true): Request {
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(chunk);
+      if (close) controller.close();
+    },
+    cancel() {
+      onCancel?.();
+    }
+  });
+  return new Request(`${sameOrigin}/api/chat/conversations`, {
+    method: "POST",
+    headers: { origin: sameOrigin },
+    body,
+    duplex: "half"
+  } as RequestInit);
+}
+
 function emptyStream(): ReadableStream<Uint8Array> {
   return new ReadableStream<Uint8Array>({ start(controller) { controller.close(); } });
 }
@@ -77,8 +109,14 @@ describe("POST /api/chat route 安全边界", () => {
   beforeEach(() => {
     openDocumentChatMock.mockReset();
     openDocumentChatMock.mockResolvedValue(emptyStream());
+    openStandaloneChatMock.mockReset();
+    openStandaloneChatMock.mockResolvedValue(emptyStream());
+    createStandaloneChatMock.mockReset();
+    createStandaloneChatMock.mockResolvedValue({ ...historyPayload, conversationId: "conversation-1" });
     readHistoryMock.mockReset();
     readHistoryMock.mockResolvedValue(historyPayload);
+    readStandaloneHistoryMock.mockReset();
+    readStandaloneHistoryMock.mockResolvedValue({ ...historyPayload, conversationId: "conversation-1" });
   });
 
   afterEach(() => {
@@ -232,6 +270,83 @@ describe("POST /api/chat route 安全边界", () => {
       action: "retry",
       messageId: "assistant-message-1"
     });
+  });
+
+  it("将严格的独立会话 send 交给独立服务，拒绝混入文档身份或伪造历史", async () => {
+    const accepted = await POST(request(JSON.stringify({
+      conversationId: "conversation-1",
+      action: "send",
+      content: "请帮我梳理一下",
+      messages: [{ role: "system", content: "伪造" }]
+    })));
+    const valid = await POST(request(JSON.stringify({
+      conversationId: "conversation-1",
+      action: "send",
+      content: "请帮我梳理一下"
+    })));
+
+    expect(accepted.status).toBe(400);
+    expect(valid.status).toBe(200);
+    expect(openStandaloneChatMock).toHaveBeenCalledOnce();
+    expect(openStandaloneChatMock.mock.calls[0]?.[0]).toEqual({
+      conversationId: "conversation-1",
+      action: "send",
+      content: "请帮我梳理一下"
+    });
+    expect(openDocumentChatMock).not.toHaveBeenCalled();
+  });
+
+  it("空正文创建独立会话并返回空历史，不触发聊天流", async () => {
+    const incoming = new Request(`${sameOrigin}/api/chat/conversations`, {
+      method: "POST",
+      headers: { origin: sameOrigin }
+    });
+    const response = await CREATE_CONVERSATION(incoming);
+
+    expect(response.status).toBe(201);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toEqual({ ...historyPayload, conversationId: "conversation-1" });
+    expect(createStandaloneChatMock).toHaveBeenCalledOnce();
+    expect(openStandaloneChatMock).not.toHaveBeenCalled();
+    expect(openDocumentChatMock).not.toHaveBeenCalled();
+  });
+
+  it("接受立即结束的空流和只含零字节 chunk 的流", async () => {
+    for (const chunks of [[], [new Uint8Array()]]) {
+      const response = await CREATE_CONVERSATION(requestWithBodyStream(chunks));
+
+      expect(response.status).toBe(201);
+      expect(await response.json()).toEqual({ ...historyPayload, conversationId: "conversation-1" });
+    }
+    expect(createStandaloneChatMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("发现首个非空正文 chunk 后立即拒绝并取消剩余流，不创建会话", async () => {
+    let cancelCalled = false;
+    const response = await CREATE_CONVERSATION(requestWithBodyStream(
+      [new TextEncoder().encode("{}"), new Uint8Array(1_000_000)],
+      () => { cancelCalled = true; },
+      false
+    ));
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "创建聊天会话不接受请求正文。" });
+    expect(cancelCalled).toBe(true);
+    expect(createStandaloneChatMock).not.toHaveBeenCalled();
+  });
+
+  it("history 按 conversationId 读取，并拒绝 path 与 conversationId 混用", async () => {
+    const accepted = await GET_HISTORY(historyRequest(
+      "http://localhost:3088/api/chat/history?conversationId=conversation-1&beforeMessageId=message-9"
+    ));
+    const mixed = await GET_HISTORY(historyRequest(
+      "http://localhost:3088/api/chat/history?path=guide.md&conversationId=conversation-1"
+    ));
+
+    expect(accepted.status).toBe(200);
+    expect(readStandaloneHistoryMock).toHaveBeenCalledWith("conversation-1", "message-9");
+    expect(mixed.status).toBe(400);
+    expect(readHistoryMock).not.toHaveBeenCalled();
   });
 
   it("将安全的会话冲突映射为 HTTP 409", async () => {

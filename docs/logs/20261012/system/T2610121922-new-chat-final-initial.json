@@ -1,0 +1,61 @@
+{
+  "phase": "final-initial-no-document",
+  "url": "http://127.0.0.1:6771/docs",
+  "viewport": {
+    "width": 1200,
+    "height": 919
+  },
+  "documentSelected": false,
+  "emptySelectionText": true,
+  "scroll": {
+    "clientWidth": 1200,
+    "scrollWidth": 1200
+  },
+  "buttons": [
+    {
+      "label": "新建聊天",
+      "rect": {
+        "x": 835,
+        "y": 11,
+        "width": 96,
+        "height": 44
+      },
+      "disabled": false,
+      "role": "button"
+    },
+    {
+      "label": "展开目录",
+      "rect": {
+        "x": 939,
+        "y": 11,
+        "width": 96,
+        "height": 44
+      },
+      "disabled": false,
+      "role": "button"
+    },
+    {
+      "label": "搜索页",
+      "rect": {
+        "x": 1043,
+        "y": 11,
+        "width": 64,
+        "height": 44
+      },
+      "disabled": false,
+      "role": "a"
+    },
+    {
+      "label": "审阅列表",
+      "rect": {
+        "x": 1115,
+        "y": 11,
+        "width": 72,
+        "height": 44
+      },
+      "disabled": false,
+      "role": "a"
+    }
+  ],
+  "fontStatus": "loaded"
+}

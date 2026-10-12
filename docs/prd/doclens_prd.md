@@ -238,6 +238,14 @@
 * 输入限制：单条新问题最多 4,000 字符；每条持久消息最多 32,000 字符；每轮模型上下文最多 40 条消息且合计最多 100,000 字符，按最新消息选取，不据此删除持久历史；请求 JSON body 最多 512 KiB。
 * 文档限制：服务端只接受不超过 524,288 字节且不超过 100,000 字符的文本文件。任一限制超出时返回明确提示，禁止静默截断或只传入部分文档后声称已阅读全文。
 
+**FR-16 顶部新建聊天**
+
+* `/docs` 顶部导航栏在“展开目录 / 收起目录”左侧显示“新建聊天”按钮；桌面与移动端均可使用，未选择文档时也可创建。
+* 点击后创建具有独立 `conversationId` 的空白聊天并打开现有全屏聊天界面。新聊天不附带当前文档，不自动生成概述；只有用户发送问题或显式重试时才调用 DeepSeek。新建操作进行时禁用按钮，失败显示可读提示并允许再次创建。
+* 每次点击新建均创建不同会话，已有独立聊天与文档聊天记录完整保留；关闭不删除历史。独立聊天按 canonical docs root 与会话 ID 隔离，复用流式回答、停止、重试、分页、Markdown 与图表渲染，不向 docs 源文件写入。
+* `POST /api/chat/conversations` 创建空白独立会话，返回 HTTP 201 与空 `ChatHistoryPayload`。`GET /api/chat/history` 支持 `conversationId` 查询，`POST /api/chat` 支持 `{ "conversationId": string, "action": "send", "content": string }` 或 `{ "conversationId": string, "action": "retry", "messageId": string }`；`path` 与 `conversationId` 互斥，独立聊天不支持 `summary`，客户端不能提供历史或 system 指令。文档模式的既有接口与恢复行为保持。
+* 独立会话使用兼容的增量建表存入 `DOCLENS_DB_PATH`，采用与文档聊天一致的消息预算、先持久化后推送、生成租约与中断保留策略；创建会话与读取历史不要求模型密钥，也不调用模型。界面说明问题会发送到配置的 DeepSeek 服务。
+
 ---
 
 ## 6. 数据与存储（P0）
@@ -295,6 +303,7 @@
 * `chat_conversations` 以 canonical docs root 与 normalized 文档相对路径建立唯一隔离；保存内部 `generation_id` 和 lease metadata，用于生成去重与租约协调。
 * `chat_messages` 保存消息顺序（`position`）及父消息关联（`parent_message_id`），支撑持久历史与重试关系。
 * 聊天迁移须为增量迁移，保留现有表与数据；聊天历史保存在 `DOCLENS_DB_PATH` 对应 SQLite 中，并与只读 docs 源文件隔离。服务端 generation/lease metadata 不属于公开 API。
+* 独立空白聊天通过新增会话与消息表保存，按 canonical docs root 与独立会话 ID 隔离；不改写文档聊天唯一索引或已有记录。
 
 ---
 
@@ -426,6 +435,7 @@ DOCLENS_DEEPSEEK_TIMEOUT_MS=120000
 16. 当内容适合图示时，回答优先一张 6–8 节点以内的 Mermaid 核心图；比较、分类、映射或参数问题优先紧凑 Markdown 表格；流式期间显示图表生成占位，消息完成/停止/出错后渲染一次；图表解析/安全失败时源码可见且无可执行 HTML/SVG
 17. 聊天 Mermaid 无外框和标题栏，只显示 SVG，内嵌区域不超过当前页面高度的 1/3，竖向图与横向图均按比例完整缩放；左上角放置 44px 放大按钮，不显示 tooltip 悬浮提示，且不遮挡图表节点。放大后按自然尺寸显示并支持横纵平移。普通文档预览继续使用 `presentation="document"` 的原有外观
 18. 长回复与 Mermaid 延迟渲染后最后一行可见；“回到底部”仅显示箭头图标，点击后到达实际滚动末尾。内容、输入框或窗口尺寸变化后继续跟随，上翻阅读时保留位置，滚动控件状态变化不重新挂载已渲染图表
+19. 顶部“新建聊天”位于目录按钮左侧；无需选中文档即可创建空白聊天，连续创建得到不同会话 ID，旧历史仍保留；创建和打开不自动生成，用户可发送、停止与重试，桌面 / 手机无横向溢出
 
 ---
 

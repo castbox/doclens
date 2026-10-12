@@ -1,0 +1,73 @@
+- generic [ref=e1]:
+  - alert [ref=e2]
+  - generic [aria-hidden] [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e6]:
+        - generic [ref=e7]:
+          - heading [level=6] [ref=e331]: DocLens
+          - generic [ref=e9]: Docs 浏览 + 搜索 + 审阅工作台
+        - generic [ref=e10]:
+          - button [ref=e332] [cursor=pointer]: 新建聊天
+          - button [ref=e333] [cursor=pointer]: 收起目录
+          - link [ref=e334] [cursor=pointer]:
+            - /url: /search
+            - text: 搜索页
+          - link [ref=e335] [cursor=pointer]:
+            - /url: /reviews
+            - text: 审阅列表
+    - generic [ref=e283]:
+      - generic [ref=e284]:
+        - navigation [ref=e336]:
+          - list [ref=e286]:
+            - listitem [ref=e287]:
+              - button [ref=e337] [cursor=pointer]: docs
+            - listitem [aria-hidden] [ref=e289]: /
+            - listitem [ref=e290]:
+              - paragraph [ref=e291]: guide.md
+        - generic [ref=e292]:
+          - generic [ref=e293]:
+            - heading [level=6] [ref=e338]: guide.md
+            - generic [ref=e295]: MARKDOWN
+            - generic [ref=e297]: 62 B
+          - generic [ref=e298]:
+            - button [ref=e340] [cursor=pointer]
+            - button [ref=e342] [cursor=pointer]
+            - button [ref=e343] [cursor=pointer]
+            - button [ref=e345] [cursor=pointer]
+            - button [ref=e346] [cursor=pointer]
+            - link [ref=e347] [cursor=pointer]:
+              - /url: /api/docs/file?path=guide.md&raw=1
+            - button [ref=e348] [cursor=pointer]
+      - separator [ref=e325]
+      - generic [ref=e328]:
+        - heading [level=1] [ref=e349]: 冒烟文档
+        - paragraph [ref=e330]: 文档聊天仅用于验证旧入口保持。
+    - generic: 类别
+    - generic: 已读状态
+    - button [ref=e351] [cursor=pointer]: 打开 PR 面板
+  - dialog [ref=e357]:
+    - banner [ref=e358]:
+      - generic [ref=e359]:
+        - generic [ref=e360]:
+          - generic [ref=e361]:
+            - heading "文档对话" [level=1] [ref=e362]
+            - generic [ref=e363]: DeepSeek
+          - generic [ref=e365]:
+            - paragraph [ref=e366]: guide.md
+            - generic "docs/guide.md" [ref=e367]
+        - button "关闭文档对话" [ref=e368] [cursor=pointer]
+    - main [ref=e371]:
+      - log "文档聊天记录" [ref=e372]:
+        - article "DeepSeek 回复" [ref=e374]:
+          - heading "DeepSeek" [level=6] [ref=e379]
+          - paragraph [ref=e382]: 本地模拟回答：新聊天可以连续提问。
+    - contentinfo [ref=e383]:
+      - generic [ref=e385]:
+        - textbox "询问这份文档" [active] [ref=e388]:
+          - /placeholder: 询问这份文档…
+        - generic [ref=e389]:
+          - generic [ref=e390]: Enter 发送 · Shift + Enter 换行
+          - generic [ref=e391]:
+            - generic [ref=e392]: 0 / 4000
+            - button "发送消息" [disabled]
+      - paragraph [ref=e393]: 历史记录完整保存，回答参考当前文档与最近对话。

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { ChatValidationError, parseChatHistory, parseChatPath, parseDocumentChatRequest } from "./chatValidation";
+import {
+  ChatValidationError,
+  parseChatHistory,
+  parseChatPath,
+  parseChatRequest,
+  parseDocumentChatRequest,
+  parseStandaloneChatRequest
+} from "./chatValidation";
 import {
   MAX_CHAT_HISTORY_CHARS,
   MAX_CHAT_MESSAGE_CHARS,
@@ -77,6 +84,49 @@ describe("parseDocumentChatRequest", () => {
     expect(parseDocumentChatRequest({ path: "guide.md", action: "retry", messageId: "x".repeat(128) })).toMatchObject({
       action: "retry"
     });
+  });
+});
+
+describe("parseStandaloneChatRequest", () => {
+  it("只接受会话 ID 与当前 send/retry 操作字段", () => {
+    expect(parseChatRequest({
+      conversationId: "conversation-1",
+      action: "send",
+      content: "请帮我梳理一下"
+    })).toEqual({ conversationId: "conversation-1", action: "send", content: "请帮我梳理一下" });
+    expect(parseStandaloneChatRequest({
+      conversationId: "conversation-1",
+      action: "retry",
+      messageId: "assistant-message-1"
+    })).toEqual({ conversationId: "conversation-1", action: "retry", messageId: "assistant-message-1" });
+  });
+
+  it("拒绝 summary、混用文档身份、客户端历史与无效 ID", () => {
+    const invalidRequests = [
+      { conversationId: "conversation-1", action: "summary" },
+      { path: "guide.md", conversationId: "conversation-1", action: "send", content: "问题" },
+      { conversationId: "conversation-1", action: "send", content: "问题", messages: [] },
+      { conversationId: "bad/id", action: "send", content: "问题" },
+      { conversationId: " ", action: "retry", messageId: "assistant-1" },
+      { conversationId: "conversation-1", action: "retry", messageId: "bad\u0001id" }
+    ];
+
+    for (const value of invalidRequests) {
+      expect(() => parseChatRequest(value)).toThrow(ChatValidationError);
+    }
+  });
+
+  it("限制独立聊天问题长度且不接受空问题", () => {
+    expect(() => parseStandaloneChatRequest({
+      conversationId: "conversation-1",
+      action: "send",
+      content: "  "
+    })).toThrow(/问题内容不能为空/);
+    expect(() => parseStandaloneChatRequest({
+      conversationId: "conversation-1",
+      action: "send",
+      content: "q".repeat(MAX_QUESTION_CHARS + 1)
+    })).toThrow(/每个问题不能超过/);
   });
 });
 

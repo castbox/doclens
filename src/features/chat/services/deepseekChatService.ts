@@ -1,8 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { buildDocumentChatMessages } from "@/features/chat/domain/chatPrompts";
-import { parseChatPath, parseDocumentChatRequest, ChatValidationError } from "@/features/chat/domain/chatValidation";
+import { buildDocumentChatMessages, buildStandaloneChatMessages } from "@/features/chat/domain/chatPrompts";
+import { parseChatConversationId, parseChatPath, parseChatRequest, ChatValidationError } from "@/features/chat/domain/chatValidation";
 import { detectPreviewKind } from "@/features/docs/domain/fileType";
 import {
   MAX_CHAT_DOCUMENT_BYTES,
@@ -11,8 +11,11 @@ import {
   type ChatDocumentIdentity,
   type ChatGeneration,
   type ChatHistoryPayload,
+  type ChatRequest,
   type ChatStreamEvent,
-  type DocumentChatRequest
+  type DocumentChatRequest,
+  type StandaloneChatIdentity,
+  type StandaloneChatRequest
 } from "@/features/chat/domain/types";
 import { resolveDocsPath, PathSecurityError } from "@/features/docs/domain/pathRules";
 import { readFilePreview } from "@/features/docs/services/docsFsService";
@@ -22,9 +25,12 @@ import { ChatConfigurationError, getChatConfig } from "./chatConfig";
 import {
   appendDocumentChatDelta,
   beginDocumentChatTurn,
+  beginStandaloneChatTurn,
   ChatHistoryError,
+  createStandaloneChatConversation as createStandaloneChatConversationInRepo,
   ensureChatHistorySchema,
   finishDocumentChatTurn,
+  getStandaloneChatHistory,
   getDocumentChatHistory
 } from "./chatHistoryRepo";
 
@@ -244,6 +250,62 @@ function readCurrentHistory(document: ChatDocumentIdentity): ChatHistoryPayload 
   }
 }
 
+function readCurrentStandaloneHistory(identity: StandaloneChatIdentity): ChatHistoryPayload | null {
+  try {
+    return getStandaloneChatHistory(identity);
+  } catch {
+    return null;
+  }
+}
+
+async function getCanonicalDocsRoot(): Promise<string> {
+  try {
+    return await fs.realpath(getConfig().docsRoot);
+  } catch {
+    throw new ChatServiceError("文档目录暂不可用。", 503);
+  }
+}
+
+export async function createStandaloneChatConversation(): Promise<ChatHistoryPayload> {
+  const docsRoot = await getCanonicalDocsRoot();
+  try {
+    return createStandaloneChatConversationInRepo(docsRoot);
+  } catch (error) {
+    throw mapHistoryError(error);
+  }
+}
+
+export async function readStandaloneChatHistory(
+  inputConversationId: string,
+  beforeMessageId?: string
+): Promise<ChatHistoryPayload> {
+  let conversationId: string;
+  try {
+    conversationId = parseChatConversationId(inputConversationId);
+  } catch (error) {
+    if (error instanceof ChatValidationError) throw new ChatServiceError(error.message, 400);
+    throw new ChatServiceError("聊天会话 ID 无效。", 400);
+  }
+
+  if (
+    beforeMessageId !== undefined &&
+    (
+      !beforeMessageId.trim() ||
+      beforeMessageId.length > 128 ||
+      /[\u0000-\u001f\u007f-\u009f]/.test(beforeMessageId)
+    )
+  ) {
+    throw new ChatServiceError("历史记录游标无效。", 400);
+  }
+
+  const docsRoot = await getCanonicalDocsRoot();
+  try {
+    return getStandaloneChatHistory({ docsRoot, conversationId }, beforeMessageId);
+  } catch (error) {
+    throw mapHistoryError(error, beforeMessageId !== undefined);
+  }
+}
+
 export async function readDocumentChatHistory(inputPath: string, beforeMessageId?: string): Promise<ChatHistoryPayload> {
   let safePath: string;
   try {
@@ -285,10 +347,10 @@ export async function readDocumentChatHistory(inputPath: string, beforeMessageId
   }
 }
 
-export async function openDocumentChat(request: DocumentChatRequest, signal: AbortSignal): Promise<ReadableStream<Uint8Array>> {
-  let parsedRequest: DocumentChatRequest;
+export async function openChat(request: ChatRequest, signal: AbortSignal): Promise<ReadableStream<Uint8Array>> {
+  let parsedRequest: ChatRequest;
   try {
-    parsedRequest = parseDocumentChatRequest(request);
+    parsedRequest = parseChatRequest(request);
   } catch (error) {
     if (error instanceof ChatValidationError) {
       throw new ChatServiceError(error.message, 400);
@@ -300,15 +362,33 @@ export async function openDocumentChat(request: DocumentChatRequest, signal: Abo
     throw new ChatServiceError("聊天请求已取消。", 499);
   }
 
-  let documentContext: Awaited<ReturnType<typeof readDocumentContext>>;
-  try {
-    documentContext = await readDocumentContext(parsedRequest.path);
-    const latestLocation = await locateSafeDocument(parsedRequest.path);
-    assertSameDocument(documentContext.location, latestLocation);
-    ensureChatHistorySchema();
-  } catch (error) {
-    if (error instanceof ChatServiceError) throw error;
-    throw mapHistoryError(error);
+  const isStandalone = "conversationId" in parsedRequest;
+  let documentContext: Awaited<ReturnType<typeof readDocumentContext>> | null = null;
+  let standaloneIdentity: StandaloneChatIdentity | null = null;
+  let readHistory: () => ChatHistoryPayload | null;
+  if (isStandalone) {
+    const docsRoot = await getCanonicalDocsRoot();
+    const standaloneRequest = parsedRequest as StandaloneChatRequest;
+    standaloneIdentity = { docsRoot, conversationId: standaloneRequest.conversationId };
+    try {
+      getStandaloneChatHistory(standaloneIdentity);
+      ensureChatHistorySchema();
+    } catch (error) {
+      throw mapHistoryError(error);
+    }
+    readHistory = () => readCurrentStandaloneHistory(standaloneIdentity!);
+  } else {
+    const documentRequest = parsedRequest as DocumentChatRequest;
+    try {
+      documentContext = await readDocumentContext(documentRequest.path);
+      const latestLocation = await locateSafeDocument(documentRequest.path);
+      assertSameDocument(documentContext.location, latestLocation);
+      ensureChatHistorySchema();
+    } catch (error) {
+      if (error instanceof ChatServiceError) throw error;
+      throw mapHistoryError(error);
+    }
+    readHistory = () => readCurrentHistory(documentContext!.identity);
   }
 
   let chatConfig: ReturnType<typeof getChatConfig>;
@@ -324,7 +404,9 @@ export async function openDocumentChat(request: DocumentChatRequest, signal: Abo
 
   let generation: ChatGeneration;
   try {
-    generation = beginDocumentChatTurn(documentContext.identity, parsedRequest, chatConfig.timeoutMs + 30_000);
+    generation = isStandalone
+      ? beginStandaloneChatTurn(standaloneIdentity!, parsedRequest as StandaloneChatRequest, chatConfig.timeoutMs + 30_000)
+      : beginDocumentChatTurn(documentContext!.identity, parsedRequest as DocumentChatRequest, chatConfig.timeoutMs + 30_000);
   } catch (error) {
     throw mapHistoryError(error);
   }
@@ -340,25 +422,27 @@ export async function openDocumentChat(request: DocumentChatRequest, signal: Abo
 
   let messages: ReturnType<typeof buildDocumentChatMessages>;
   try {
-    messages = buildDocumentChatMessages(
-      generation.messages,
-      {
-        path: documentContext.identity.repositoryPath,
-        content: documentContext.content,
-        revision: documentContext.identity.revision
-      },
-      {
-        documentChanged: generation.history.documentChanged,
-        historyTruncated: generation.contextLimited ?? false
-      }
-    );
+    messages = documentContext
+      ? buildDocumentChatMessages(
+          generation.messages,
+          {
+            path: documentContext.identity.repositoryPath,
+            content: documentContext.content,
+            revision: documentContext.identity.revision
+          },
+          {
+            documentChanged: generation.history.documentChanged,
+            historyTruncated: generation.contextLimited ?? false
+          }
+        )
+      : buildStandaloneChatMessages(generation.messages, { historyTruncated: generation.contextLimited ?? false });
   } catch {
     try {
       finishDocumentChatTurn(generation, "error", "无法准备当前文档的聊天上下文。");
     } catch {
       // The chat context error is already safe for the route response.
     }
-    throw new ChatServiceError("无法准备当前文档的聊天上下文。", 500);
+    throw new ChatServiceError(documentContext ? "无法准备当前文档的聊天上下文。" : "无法准备聊天上下文。", 500);
   }
 
   const abortController = new AbortController();
@@ -390,13 +474,13 @@ export async function openDocumentChat(request: DocumentChatRequest, signal: Abo
 
   const finishGeneration = (status: "complete" | "stopped" | "error", errorMessage?: string): Promise<ChatHistoryPayload | null> => {
     if (finishPromise) return finishPromise;
-    if (generationFinished) return Promise.resolve(readCurrentHistory(documentContext.identity));
+    if (generationFinished) return Promise.resolve(readHistory());
 
     finishPromise = Promise.resolve().then(() => {
       try {
         finishDocumentChatTurn(generation, status, errorMessage);
         generationFinished = true;
-        const history = readCurrentHistory(documentContext.identity);
+        const history = readHistory();
         if (status === "complete" && !history?.messages.some((message) => message.id === generation.assistantMessageId && message.status === "complete")) {
           fenced = true;
         }
@@ -404,7 +488,7 @@ export async function openDocumentChat(request: DocumentChatRequest, signal: Abo
       } catch {
         generationFinished = true;
         if (status === "complete") fenced = true;
-        return readCurrentHistory(documentContext.identity);
+        return readHistory();
       }
     });
     return finishPromise;
@@ -543,7 +627,7 @@ export async function openDocumentChat(request: DocumentChatRequest, signal: Abo
     if (terminalSent || streamCancelled) return;
     terminalSent = true;
     const history = fenced
-      ? readCurrentHistory(documentContext.identity)
+      ? readHistory()
       : await finishGeneration("error", message);
     await cancelReader();
     cleanup();
@@ -750,4 +834,12 @@ export async function openDocumentChat(request: DocumentChatRequest, signal: Abo
   });
 
   return stream;
+}
+
+export function openDocumentChat(request: DocumentChatRequest, signal: AbortSignal): Promise<ReadableStream<Uint8Array>> {
+  return openChat(request, signal);
+}
+
+export function openStandaloneChat(request: StandaloneChatRequest, signal: AbortSignal): Promise<ReadableStream<Uint8Array>> {
+  return openChat(request, signal);
 }

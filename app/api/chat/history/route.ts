@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { isSameOriginRequest } from "../origin";
-import { ChatValidationError, parseChatPath } from "@/features/chat/domain/chatValidation";
+import { ChatValidationError, parseChatConversationId, parseChatPath } from "@/features/chat/domain/chatValidation";
 import { PathSecurityError } from "@/features/docs/domain/pathRules";
-import { ChatServiceError, readDocumentChatHistory } from "@/features/chat/services/deepseekChatService";
+import { ChatServiceError, readDocumentChatHistory, readStandaloneChatHistory } from "@/features/chat/services/deepseekChatService";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,8 +37,12 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   const pathValues = searchParams.getAll("path");
-  if (pathValues.length !== 1) {
-    return jsonError("必须提供唯一的文档 path 参数。", 400);
+  const conversationIdValues = searchParams.getAll("conversationId");
+  if (
+    (pathValues.length !== 1 && conversationIdValues.length !== 1) ||
+    (pathValues.length > 0 && conversationIdValues.length > 0)
+  ) {
+    return jsonError("必须且只能提供一个文档 path 或聊天 conversationId 参数。", 400);
   }
 
   const cursorValues = searchParams.getAll("beforeMessageId");
@@ -58,21 +62,34 @@ export async function GET(request: Request): Promise<Response> {
     return jsonError("历史游标无效。", 400);
   }
 
-  let documentPath: string;
-  try {
-    documentPath = parseChatPath(pathValues[0]);
-  } catch (error) {
-    if (error instanceof ChatValidationError) {
-      return jsonError(error.message, 400);
+  let parsedPath: string | null = null;
+  let conversationId: string | null = null;
+  if (pathValues.length === 1) {
+    try {
+      parsedPath = parseChatPath(pathValues[0]);
+    } catch (error) {
+      if (error instanceof ChatValidationError) {
+        return jsonError(error.message, 400);
+      }
+      return jsonError("文档路径无效或不可访问。", 400);
     }
-    return jsonError("文档路径无效或不可访问。", 400);
+  } else {
+    try {
+      conversationId = parseChatConversationId(conversationIdValues[0]);
+    } catch (error) {
+      if (error instanceof ChatValidationError) {
+        return jsonError(error.message, 400);
+      }
+      return jsonError("聊天会话 ID 无效。", 400);
+    }
   }
 
   try {
-    const history =
-      beforeMessageId === undefined
-        ? await readDocumentChatHistory(documentPath)
-        : await readDocumentChatHistory(documentPath, beforeMessageId);
+    const history = parsedPath !== null
+      ? beforeMessageId === undefined
+        ? await readDocumentChatHistory(parsedPath)
+        : await readDocumentChatHistory(parsedPath, beforeMessageId)
+      : await readStandaloneChatHistory(conversationId!, beforeMessageId);
     return NextResponse.json(history, {
       headers: { "Cache-Control": "no-store" }
     });

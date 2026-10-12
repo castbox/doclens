@@ -1,0 +1,88 @@
+- generic [ref=e1]:
+  - alert [ref=e2]
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e6]:
+        - generic [ref=e7]:
+          - heading "DocLens" [level=6] [ref=e252]
+          - generic [ref=e9]: Docs 浏览 + 搜索 + 审阅工作台
+        - generic [ref=e10]:
+          - button [ref=e253] [cursor=pointer]
+          - button [ref=e260] [cursor=pointer]
+          - link "搜索页" [ref=e255] [cursor=pointer]:
+            - /url: /search
+          - link "审阅列表" [ref=e256] [cursor=pointer]:
+            - /url: /reviews
+    - generic [ref=e261]:
+      - generic [ref=e262]:
+        - heading "Docs 目录" [level=6] [ref=e263]
+        - button "收起" [ref=e264] [cursor=pointer]
+      - separator [ref=e265]
+      - tablist [ref=e268]:
+        - tab "目录树" [selected] [ref=e269] [cursor=pointer]
+        - tab "星标文档" [ref=e270] [cursor=pointer]
+      - generic [ref=e272]:
+        - generic [ref=e274]:
+          - textbox "filter docs tree" [ref=e275]:
+            - /placeholder: 筛选目录/文件
+          - group [aria-hidden]
+        - list [ref=e276]:
+          - button "guide.md" [active] [ref=e277] [cursor=pointer]
+    - generic [ref=e283]:
+      - generic [ref=e284]:
+        - navigation "breadcrumb" [ref=e285]:
+          - list [ref=e286]:
+            - listitem [ref=e287]:
+              - button "docs" [ref=e288] [cursor=pointer]
+            - listitem [aria-hidden] [ref=e289]: /
+            - listitem [ref=e290]:
+              - paragraph [ref=e291]: guide.md
+        - generic [ref=e292]:
+          - generic [ref=e293]:
+            - heading "guide.md" [level=6] [ref=e294]
+            - generic [ref=e295]: MARKDOWN
+            - generic [ref=e297]: 62 B
+          - generic [ref=e298]:
+            - generic "与当前文档对话" [ref=e299]:
+              - button "与当前文档对话" [ref=e300] [cursor=pointer]
+            - generic "加入星标" [ref=e303]:
+              - button "add doc star" [ref=e304] [cursor=pointer]
+            - button "copy path" [ref=e307] [cursor=pointer]
+            - generic "保存为 Word 文档" [ref=e310]:
+              - button "save as word document" [ref=e311] [cursor=pointer]
+            - button "copy markdown source" [ref=e314] [cursor=pointer]
+            - link "open raw" [ref=e318] [cursor=pointer]:
+              - /url: /api/docs/file?path=guide.md&raw=1
+            - button "展开文档大纲" [ref=e321] [cursor=pointer]
+      - separator [ref=e325]
+      - generic [ref=e328]:
+        - heading "冒烟文档" [level=1] [ref=e329]
+        - paragraph [ref=e330]: 文档聊天仅用于验证旧入口保持。
+    - generic [ref=e28]:
+      - generic [ref=e29]:
+        - generic [ref=e30]:
+          - heading "PR 文件面板" [level=6] [ref=e31]
+          - generic [ref=e32]:
+            - generic "刷新最新 PR 文件" [ref=e33]:
+              - button "刷新最新 PR 文件" [ref=e34] [cursor=pointer]
+            - button "收起" [ref=e37] [cursor=pointer]
+        - separator [ref=e38]
+        - tablist [ref=e41]:
+          - tab "全部文件 0" [selected] [ref=e42] [cursor=pointer]
+          - tab "星标文档 0" [ref=e43] [cursor=pointer]
+        - generic [ref=e45]:
+          - generic [ref=e46]:
+            - generic: 类别
+            - generic [ref=e47]:
+              - combobox "类别" [ref=e48] [cursor=pointer]
+              - textbox [aria-hidden]
+              - group [aria-hidden]
+          - generic [ref=e49]:
+            - generic [ref=e50]: 已读状态
+            - generic [ref=e51]:
+              - combobox "已读状态 全部" [ref=e52] [cursor=pointer]: 全部
+              - textbox [aria-hidden]: all
+              - group [aria-hidden]
+      - generic [ref=e54]:
+        - heading "暂无 PR 文件" [level=6] [ref=e55]
+        - paragraph [ref=e56]: 请检查 docs/pr 目录是否存在文件

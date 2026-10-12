@@ -1,14 +1,20 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { resetDbClientForTests } from "@/db/client";
+import { getDb, resetDbClientForTests } from "@/db/client";
 import type { ChatDocumentIdentity, DocumentChatRequest } from "@/features/chat/domain/types";
 import {
-  beginDocumentChatTurn,
-  ChatHistoryError,
+  appendChatDelta,
   appendDocumentChatDelta,
+  beginDocumentChatTurn,
+  beginStandaloneChatTurn,
+  ChatHistoryError,
+  createStandaloneChatConversation,
+  finishChatTurn,
   finishDocumentChatTurn,
+  getStandaloneChatHistory,
   getDocumentChatHistory
 } from "./chatHistoryRepo";
 import { clearConfigCache } from "@/shared/utils/env";
@@ -79,6 +85,48 @@ describe("chatHistoryRepo", () => {
     expect(otherGeneration.conversationId).not.toBe(firstGeneration.conversationId);
     expect(getDocumentChatHistory(otherRoot).messages).toHaveLength(1);
     expect(getDocumentChatHistory(firstDocument).messages).toHaveLength(1);
+  });
+
+  it("为同一 canonical root 创建独立空白会话，隔离消息并拒绝跨 root 访问", () => {
+    const canonicalRoot = path.join(tempDir, "canonical-docs");
+    const otherRoot = path.join(tempDir, "other-docs");
+    fs.mkdirSync(canonicalRoot, { recursive: true });
+    fs.mkdirSync(otherRoot, { recursive: true });
+
+    const first = createStandaloneChatConversation(canonicalRoot);
+    const second = createStandaloneChatConversation(canonicalRoot);
+    expect(first).toMatchObject({
+      conversationId: expect.any(String),
+      messages: [],
+      isGenerating: false,
+      documentChanged: false,
+      hasMore: false
+    });
+    expect(second.conversationId).not.toBe(first.conversationId);
+
+    const storedConversation = getDb().get<{ doc_path: string | null; repository_path: string | null }>(
+      sql`SELECT doc_path, repository_path FROM standalone_chat_conversations WHERE id = ${first.conversationId}`
+    );
+    expect(storedConversation).toEqual({ doc_path: null, repository_path: null });
+
+    const firstIdentity = { docsRoot: canonicalRoot, conversationId: first.conversationId! };
+    const secondIdentity = { docsRoot: canonicalRoot, conversationId: second.conversationId! };
+    const generation = beginStandaloneChatTurn(firstIdentity, {
+      conversationId: firstIdentity.conversationId,
+      action: "send",
+      content: "独立会话问题"
+    }, 5_000);
+    expect(appendChatDelta(generation, "独立回答")).toBe(true);
+    finishChatTurn(generation, "complete");
+
+    expect(getStandaloneChatHistory(firstIdentity).messages.map((message) => message.content)).toEqual(["独立会话问题", "独立回答"]);
+    expect(getStandaloneChatHistory(secondIdentity).messages).toEqual([]);
+    expect(() => getStandaloneChatHistory({ docsRoot: otherRoot, conversationId: firstIdentity.conversationId })).toThrow("找不到该聊天会话");
+    expect(() => beginStandaloneChatTurn({ docsRoot: otherRoot, conversationId: firstIdentity.conversationId }, {
+      conversationId: firstIdentity.conversationId,
+      action: "send",
+      content: "跨 root"
+    }, 5_000)).toThrow("找不到该聊天会话");
   });
 
   it("禁止对已有消息的文档重复创建概述", () => {

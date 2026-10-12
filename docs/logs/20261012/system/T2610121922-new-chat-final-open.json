@@ -1,0 +1,32 @@
+{
+  "url": "http://127.0.0.1:6771/docs",
+  "viewport": {
+    "width": 1200,
+    "height": 919
+  },
+  "dialogTitle": "新建聊天",
+  "log": {
+    "role": "log",
+    "aria": "聊天记录",
+    "text": "发送消息开始聊天"
+  },
+  "input": {
+    "exists": true,
+    "placeholder": "输入消息…",
+    "aria": "输入消息",
+    "focused": true
+  },
+  "scroll": {
+    "clientWidth": 1200,
+    "scrollWidth": 1200,
+    "logClientWidth": 1189,
+    "logScrollWidth": 1189
+  },
+  "dialog": {
+    "x": 0,
+    "y": 0,
+    "width": 1200,
+    "height": 919
+  },
+  "documentContextText": false
+}

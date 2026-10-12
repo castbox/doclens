@@ -1,0 +1,43 @@
+- generic [ref=e1] [box=0,0,1200,919]:
+  - alert [ref=e2] [box=-1,-1,1,1]
+  - generic [aria-hidden] [ref=e3] [box=0,0,1200,919]:
+    - banner [ref=e4] [box=0,0,1200,66]:
+      - generic [ref=e6] [box=13,11,1174,44]:
+        - generic [ref=e7] [box=13,17,249,32]:
+          - heading [level=6] [ref=e57] [box=13,17,76,32]: DocLens
+          - generic [ref=e9] [box=99,23,163,20]: Docs 浏览 + 搜索 + 审阅工作台
+        - generic [ref=e10] [box=835,11,352,44]:
+          - button [ref=e58] [cursor=pointer] [box=835,11,96,44]: 新建聊天
+          - button [ref=e61] [cursor=pointer] [box=939,11,96,44]: 展开目录
+          - link [ref=e62] [cursor=pointer] [box=1043,11,64,44]:
+            - /url: /search
+            - text: 搜索页
+          - link [ref=e63] [cursor=pointer] [box=1115,11,72,44]:
+            - /url: /reviews
+            - text: 审阅列表
+    - generic [ref=e25] [box=23,87,786,106]:
+      - heading [level=6] [ref=e64] [box=48,112,736,28]: 请选择文件
+      - paragraph [ref=e27] [box=48,146,736,22]: 从左侧目录树选择一个文档开始预览
+    - generic [box=1220,179,34,23]: 类别
+    - generic [box=1366,179,58,23]: 已读状态
+    - button [ref=e66] [cursor=pointer] [box=1053,78,137,37]: 打开 PR 面板
+  - dialog [ref=e72] [box=0,0,1200,919]:
+    - banner [ref=e73] [box=0,0,1200,67]:
+      - generic [ref=e74] [box=20,10,1160,44]:
+        - generic [ref=e76] [box=20,21,1104,22]:
+          - heading "新建聊天" [level=1] [ref=e77] [box=20,21,64,22]
+          - generic [ref=e78] [box=92,21,75,22]: DeepSeek
+        - button "关闭聊天" [ref=e80] [cursor=pointer] [box=1136,10,44,44]
+    - main [ref=e83] [box=0,67,1200,703]:
+      - log "聊天记录" [ref=e84] [box=0,67,1200,703]:
+        - paragraph [ref=e86] [box=40,405,1109,26]: 发送消息开始聊天
+    - contentinfo [ref=e87] [box=0,770,1200,149]:
+      - generic [ref=e89] [box=20,783,1160,100]:
+        - textbox "输入消息" [active] [ref=e92] [box=31,794,1138,25]:
+          - /placeholder: 输入消息…
+        - generic [ref=e93] [box=31,829,1138,44]:
+          - generic [ref=e94] [box=31,842,159,17]: Enter 发送 · Shift + Enter 换行
+          - generic [ref=e95] [box=1071,829,98,44]:
+            - generic [ref=e96] [box=1071,841,46,20]: 0 / 4000
+            - button "发送消息" [disabled] [box=1125,829,44,44]
+      - paragraph [ref=e97] [box=20,890,1160,17]: 消息会发送到 DeepSeek，聊天记录完整保存并参考最近对话。

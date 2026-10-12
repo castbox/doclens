@@ -1,0 +1,14 @@
+{
+  "status": 200,
+  "conversationId": "cf7104fe-d223-4a94-b519-4e74e44b7242",
+  "isGenerating": false,
+  "messages": [
+    {
+      "id": "3b409a44-ab66-4a4f-a797-a1272603ca32",
+      "role": "assistant",
+      "status": "complete",
+      "content": "本地模拟回答：新聊天可以连续提问。"
+    }
+  ],
+  "hasMore": false
+}

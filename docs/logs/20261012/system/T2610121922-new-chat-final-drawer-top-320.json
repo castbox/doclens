@@ -1,0 +1,59 @@
+{
+  "url": "http://127.0.0.1:6771/docs",
+  "viewport": {
+    "width": 320,
+    "height": 812
+  },
+  "header": {
+    "rect": {
+      "x": 0,
+      "y": 0,
+      "width": 320,
+      "height": 128.75,
+      "top": 0,
+      "bottom": 128.75
+    }
+  },
+  "drawerHeaderBottom": 128.75,
+  "drawers": [
+    {
+      "i": 0,
+      "rect": {
+        "x": -320,
+        "y": 129,
+        "width": 320,
+        "height": 683,
+        "top": 129,
+        "bottom": 812
+      },
+      "position": "fixed",
+      "transform": "matrix(1, 0, 0, 1, -320, 0)",
+      "display": "flex",
+      "visibility": "hidden",
+      "overflowX": "auto",
+      "role": null
+    },
+    {
+      "i": 1,
+      "rect": {
+        "x": 320,
+        "y": 129,
+        "width": 360,
+        "height": 683,
+        "top": 129,
+        "bottom": 812
+      },
+      "position": "fixed",
+      "transform": "matrix(1, 0, 0, 1, 360, 0)",
+      "display": "flex",
+      "visibility": "hidden",
+      "overflowX": "auto",
+      "role": null
+    }
+  ],
+  "docWidth": {
+    "client": 320,
+    "scroll": 320,
+    "bodyScroll": 320
+  }
+}

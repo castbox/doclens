@@ -1,0 +1,34 @@
+{
+  "viewport": {
+    "width": 320,
+    "height": 812
+  },
+  "active": {
+    "tag": "DIV",
+    "text": "PR 文件面板\n收起\n全部文件 0\n星标文档 0\n类别\n​\n类别\n已读状态\n全部\n已读状态\n暂无 PR 文件\n\n请检查 docs/pr 目录是否存在文件",
+    "aria": null
+  },
+  "create": {
+    "x": 9,
+    "y": 43,
+    "width": 96,
+    "height": 44
+  },
+  "createFocused": false,
+  "directory": {
+    "x": 109,
+    "y": 43,
+    "width": 96,
+    "height": 44
+  },
+  "appbar": {
+    "x": 0,
+    "y": 0,
+    "width": 320,
+    "height": 128.8
+  },
+  "scroll": {
+    "client": 320,
+    "total": 320
+  }
+}

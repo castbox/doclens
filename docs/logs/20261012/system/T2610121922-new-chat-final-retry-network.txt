@@ -1,0 +1,21 @@
+19. [GET] http://127.0.0.1:6771/api/docs/tree? => [200] OK
+20. [GET] http://127.0.0.1:6771/api/reviews/pr-files => [200] OK
+21. [GET] http://127.0.0.1:6771/search?_rsc=sgp6r => [200] OK
+22. [GET] http://127.0.0.1:6771/reviews?_rsc=sgp6r => [200] OK
+25. [POST] http://127.0.0.1:6771/api/chat/conversations => [201] Created
+30. [GET] http://127.0.0.1:6771/api/chat/history?conversationId=a08fa0f1-d681-4241-a6b4-f4983a19d3c7 => [200] OK
+31. [GET] http://127.0.0.1:6771/api/reviews/pr-files => [200] OK
+32. [POST] http://127.0.0.1:6771/api/chat/conversations => [201] Created
+33. [GET] http://127.0.0.1:6771/api/chat/history?conversationId=d14489b1-a017-42e0-a7ff-cae296c28907 => [200] OK
+34. [GET] http://127.0.0.1:6771/api/chat/history?conversationId=a08fa0f1-d681-4241-a6b4-f4983a19d3c7 => [200] OK
+35. [POST] http://127.0.0.1:6771/api/chat => [200] OK
+36. [GET] http://127.0.0.1:6771/api/chat/history?conversationId=d14489b1-a017-42e0-a7ff-cae296c28907 => [200] OK
+37. [POST] http://127.0.0.1:6771/api/chat => [200] OK
+38. [GET] http://127.0.0.1:6771/api/chat/history?conversationId=d14489b1-a017-42e0-a7ff-cae296c28907 => [200] OK
+39. [GET] http://127.0.0.1:6771/api/chat/history?conversationId=d14489b1-a017-42e0-a7ff-cae296c28907 => [200] OK
+40. [GET] http://127.0.0.1:6771/api/chat/history?conversationId=d14489b1-a017-42e0-a7ff-cae296c28907 => [200] OK
+41. [POST] http://127.0.0.1:6771/api/chat => [503] Service Unavailable
+42. [GET] http://127.0.0.1:6771/api/chat/history?conversationId=d14489b1-a017-42e0-a7ff-cae296c28907 => [200] OK
+43. [POST] http://127.0.0.1:6771/api/chat => [200] OK
+
+Note: 24 static requests not shown, run with "static" option to see them.

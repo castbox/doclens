@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { sql } from "drizzle-orm";
+import path from "node:path";
+import { sql, type SQL } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import type {
   ChatDocumentIdentity,
@@ -9,7 +10,10 @@ import type {
   ChatMessageStatus,
   ChatRole,
   ChatTurn,
-  DocumentChatRequest
+  ChatRequest,
+  DocumentChatRequest,
+  StandaloneChatIdentity,
+  StandaloneChatRequest
 } from "@/features/chat/domain/types";
 import { selectChatContext } from "@/features/chat/domain/chatContext";
 import {
@@ -25,8 +29,8 @@ type DbExecutor = Pick<Db, "all" | "get" | "run">;
 type ConversationRow = {
   id: string;
   docs_root: string;
-  doc_path: string;
-  repository_path: string;
+  doc_path: string | null;
+  repository_path: string | null;
   last_revision: string | null;
   active_generation_id: string | null;
   active_revision: string | null;
@@ -35,6 +39,34 @@ type ConversationRow = {
   created_at: number;
   updated_at: number;
 };
+
+type ChatStorageScope = {
+  kind: "document" | "standalone";
+  docsRoot: string;
+  conversationId?: string;
+};
+
+type ChatStorageTables = { conversations: SQL; messages: SQL };
+
+const CHAT_STORAGE_TABLES: Record<ChatStorageScope["kind"], ChatStorageTables> = {
+  document: { conversations: sql.raw("chat_conversations"), messages: sql.raw("chat_messages") },
+  standalone: {
+    conversations: sql.raw("standalone_chat_conversations"),
+    messages: sql.raw("standalone_chat_messages")
+  }
+};
+
+function documentScope(document: ChatDocumentIdentity): ChatStorageScope {
+  return { kind: "document", docsRoot: document.docsRoot };
+}
+
+function standaloneScope(identity: StandaloneChatIdentity): ChatStorageScope {
+  return { kind: "standalone", docsRoot: identity.docsRoot, conversationId: identity.conversationId };
+}
+
+function chatTables(scope: ChatStorageScope): ChatStorageTables {
+  return CHAT_STORAGE_TABLES[scope.kind];
+}
 
 type MessageRow = {
   id: string;
@@ -105,12 +137,58 @@ export function ensureChatHistorySchema(): void {
     );
   `);
   db.run(sql`CREATE INDEX IF NOT EXISTS chat_messages_generation_idx ON chat_messages(generation_id);`);
+  db.run(sql`
+    CREATE TABLE IF NOT EXISTS standalone_chat_conversations (
+      id TEXT PRIMARY KEY NOT NULL,
+      docs_root TEXT NOT NULL,
+      doc_path TEXT,
+      repository_path TEXT,
+      last_revision TEXT,
+      active_generation_id TEXT,
+      active_revision TEXT,
+      lease_expires_at INTEGER,
+      lease_duration_ms INTEGER,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+  `);
+  db.run(sql`
+    CREATE TABLE IF NOT EXISTS standalone_chat_messages (
+      id TEXT PRIMARY KEY NOT NULL,
+      conversation_id TEXT NOT NULL,
+      position INTEGER NOT NULL,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL,
+      error TEXT,
+      parent_message_id TEXT,
+      generation_id TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      UNIQUE(conversation_id, position),
+      FOREIGN KEY(conversation_id) REFERENCES standalone_chat_conversations(id) ON DELETE CASCADE
+    );
+  `);
+  db.run(sql`CREATE INDEX IF NOT EXISTS standalone_chat_messages_generation_idx ON standalone_chat_messages(generation_id);`);
   schemaReadyDatabase = db;
 }
 
 function assertDocumentIdentity(document: ChatDocumentIdentity): void {
   if (!document.docsRoot.trim() || !document.path.trim() || !document.repositoryPath.trim() || !document.revision.trim()) {
     throw new ChatHistoryError("文档身份信息不完整", 400);
+  }
+}
+
+function assertStandaloneIdentity(identity: StandaloneChatIdentity): void {
+  if (
+    !identity.docsRoot.trim() ||
+    !path.isAbsolute(identity.docsRoot) ||
+    path.normalize(identity.docsRoot) !== identity.docsRoot ||
+    !identity.conversationId.trim() ||
+    identity.conversationId.length > 128 ||
+    /[\u0000-\u001f\u007f-\u009f]/.test(identity.conversationId)
+  ) {
+    throw new ChatHistoryError("独立聊天会话身份无效", 400);
   }
 }
 
@@ -124,10 +202,17 @@ function getConversationByDocument(executor: DbExecutor, document: ChatDocumentI
   );
 }
 
-function getConversationById(executor: DbExecutor, conversationId: string): ConversationRow | null {
+function getConversationByScopeId(
+  executor: DbExecutor,
+  scope: ChatStorageScope,
+  conversationId: string
+): ConversationRow | null {
+  const tables = chatTables(scope);
   return (
     (executor.get<ConversationRow>(sql`
-      SELECT * FROM chat_conversations WHERE id = ${conversationId} LIMIT 1
+      SELECT * FROM ${tables.conversations}
+      WHERE id = ${conversationId} AND docs_root = ${scope.docsRoot}
+      LIMIT 1
     `) as ConversationRow | undefined) ?? null
   );
 }
@@ -149,45 +234,47 @@ function toChatMessage(row: MessageRow): ChatMessage {
 function makeHistoryPayload(
   conversation: ConversationRow | null,
   rows: MessageRow[],
-  document: ChatDocumentIdentity,
+  document: ChatDocumentIdentity | null,
   hasMore: boolean
 ): ChatHistoryPayload {
   return {
     conversationId: conversation?.id ?? null,
     messages: rows.map(toChatMessage),
     isGenerating: Boolean(conversation?.active_generation_id),
-    documentChanged: Boolean(conversation?.last_revision && conversation.last_revision !== document.revision),
+    documentChanged: Boolean(document && conversation?.last_revision && conversation.last_revision !== document.revision),
     hasMore
   };
 }
 
 function getHistoryPage(
   executor: DbExecutor,
+  scope: ChatStorageScope,
   conversationId: string,
   beforeMessageId?: string
 ): { rows: MessageRow[]; hasMore: boolean } {
+  const tables = chatTables(scope);
   let beforePosition: number | null = null;
   if (beforeMessageId) {
     const cursor = executor.get<{ id: string; conversation_id: string; position: number }>(sql`
-      SELECT id, conversation_id, position FROM chat_messages
+      SELECT id, conversation_id, position FROM ${tables.messages}
       WHERE id = ${beforeMessageId} AND conversation_id = ${conversationId}
       LIMIT 1
     `) as { id: string; conversation_id: string; position: number } | undefined;
     if (!cursor) {
-      throw new ChatHistoryError("历史游标不属于当前文档", 409);
+      throw new ChatHistoryError(scope.kind === "document" ? "历史游标不属于当前文档" : "历史游标不属于当前会话", 409);
     }
     beforePosition = cursor.position;
   }
 
   const descendingRows = beforePosition === null
     ? executor.all<MessageRow>(sql`
-        SELECT * FROM chat_messages
+        SELECT * FROM ${tables.messages}
         WHERE conversation_id = ${conversationId}
         ORDER BY position DESC
         LIMIT ${MAX_CHAT_HISTORY_PAGE_MESSAGES}
       `) as MessageRow[]
     : executor.all<MessageRow>(sql`
-        SELECT * FROM chat_messages
+        SELECT * FROM ${tables.messages}
         WHERE conversation_id = ${conversationId} AND position < ${beforePosition}
         ORDER BY position DESC
         LIMIT ${MAX_CHAT_HISTORY_PAGE_MESSAGES}
@@ -206,7 +293,7 @@ function getHistoryPage(
   const oldestSelected = selectedDescending[selectedDescending.length - 1];
   const hasMore = selectedDescending.length < descendingRows.length || Boolean(
     oldestSelected && executor.get<{ present: number }>(sql`
-      SELECT 1 AS present FROM chat_messages
+      SELECT 1 AS present FROM ${tables.messages}
       WHERE conversation_id = ${conversationId} AND position < ${oldestSelected.position}
       LIMIT 1
     `)
@@ -217,16 +304,18 @@ function getHistoryPage(
 
 function getContextRows(
   executor: DbExecutor,
+  scope: ChatStorageScope,
   conversationId: string,
   beforePosition?: number
 ): { rows: MessageRow[]; hasEarlierMessages: boolean } {
+  const tables = chatTables(scope);
   const recentRows = beforePosition === undefined
     ? executor.all<MessageRow>(sql`
-        SELECT * FROM chat_messages WHERE conversation_id = ${conversationId}
+        SELECT * FROM ${tables.messages} WHERE conversation_id = ${conversationId}
         ORDER BY position DESC LIMIT ${MAX_CHAT_HISTORY_PAGE_MESSAGES}
       `) as MessageRow[]
     : executor.all<MessageRow>(sql`
-        SELECT * FROM chat_messages
+        SELECT * FROM ${tables.messages}
         WHERE conversation_id = ${conversationId} AND position < ${beforePosition}
         ORDER BY position DESC LIMIT ${MAX_CHAT_HISTORY_PAGE_MESSAGES}
       `) as MessageRow[];
@@ -234,7 +323,7 @@ function getContextRows(
   const oldestRecent = rows[0];
   const earlierMessage = oldestRecent
     ? executor.get<{ id: string }>(sql`
-        SELECT id FROM chat_messages
+        SELECT id FROM ${tables.messages}
         WHERE conversation_id = ${conversationId}
           AND position < ${oldestRecent.position}
           AND (role = 'user' OR parent_message_id IS NOT NULL)
@@ -242,7 +331,7 @@ function getContextRows(
       `)
     : undefined;
   const summary = executor.get<MessageRow>(sql`
-    SELECT * FROM chat_messages
+    SELECT * FROM ${tables.messages}
     WHERE conversation_id = ${conversationId}
       AND role = 'assistant'
       AND parent_message_id IS NULL
@@ -257,24 +346,38 @@ function getContextRows(
   return { rows, hasEarlierMessages: Boolean(earlierMessage) };
 }
 
-function getAssistantForGeneration(executor: DbExecutor, conversationId: string, generationId: string): MessageRow | null {
+function getAssistantForGeneration(
+  executor: DbExecutor,
+  scope: ChatStorageScope,
+  conversationId: string,
+  generationId: string
+): MessageRow | null {
+  const tables = chatTables(scope);
   return (
     (executor.get<MessageRow>(sql`
-      SELECT * FROM chat_messages
+      SELECT * FROM ${tables.messages}
       WHERE conversation_id = ${conversationId} AND generation_id = ${generationId} AND role = 'assistant'
       LIMIT 1
     `) as MessageRow | undefined) ?? null
   );
 }
 
-function clearConversationLease(executor: DbExecutor, conversationId: string, now: number, status: ChatMessageStatus, error: string | null): void {
-  const conversation = getConversationById(executor, conversationId);
+function clearConversationLease(
+  executor: DbExecutor,
+  scope: ChatStorageScope,
+  conversationId: string,
+  now: number,
+  status: ChatMessageStatus,
+  error: string | null
+): void {
+  const tables = chatTables(scope);
+  const conversation = getConversationByScopeId(executor, scope, conversationId);
   if (!conversation?.active_generation_id) {
     return;
   }
 
   executor.run(sql`
-    UPDATE chat_messages
+    UPDATE ${tables.messages}
     SET status = ${status}, error = ${error}, updated_at = ${now}
     WHERE conversation_id = ${conversationId}
       AND generation_id = ${conversation.active_generation_id}
@@ -282,17 +385,18 @@ function clearConversationLease(executor: DbExecutor, conversationId: string, no
       AND status IN ('pending', 'streaming')
   `);
   executor.run(sql`
-    UPDATE chat_conversations
+    UPDATE ${tables.conversations}
     SET active_generation_id = NULL,
         active_revision = NULL,
         lease_expires_at = NULL,
         lease_duration_ms = NULL,
         updated_at = ${now}
-    WHERE id = ${conversationId} AND active_generation_id = ${conversation.active_generation_id}
+    WHERE id = ${conversationId} AND docs_root = ${scope.docsRoot}
+      AND active_generation_id = ${conversation.active_generation_id}
   `);
 }
 
-function recoverExpiredLease(executor: DbExecutor, conversation: ConversationRow, now: number): ConversationRow {
+function recoverExpiredLease(executor: DbExecutor, scope: ChatStorageScope, conversation: ConversationRow, now: number): ConversationRow {
   if (!conversation.active_generation_id) {
     return conversation;
   }
@@ -301,8 +405,8 @@ function recoverExpiredLease(executor: DbExecutor, conversation: ConversationRow
     return conversation;
   }
 
-  clearConversationLease(executor, conversation.id, now, "stopped", STALE_LEASE_MESSAGE);
-  return getConversationById(executor, conversation.id) ?? conversation;
+  clearConversationLease(executor, scope, conversation.id, now, "stopped", STALE_LEASE_MESSAGE);
+  return getConversationByScopeId(executor, scope, conversation.id) ?? conversation;
 }
 
 function ensureConversation(executor: DbExecutor, document: ChatDocumentIdentity, now: number): ConversationRow {
@@ -325,16 +429,18 @@ function ensureConversation(executor: DbExecutor, document: ChatDocumentIdentity
   return conversation;
 }
 
-function nextMessagePosition(executor: DbExecutor, conversationId: string): number {
+function nextMessagePosition(executor: DbExecutor, scope: ChatStorageScope, conversationId: string): number {
+  const tables = chatTables(scope);
   const row = executor.get<{ next_position: number }>(sql`
     SELECT COALESCE(MAX(position), -1) + 1 AS next_position
-    FROM chat_messages WHERE conversation_id = ${conversationId}
+    FROM ${tables.messages} WHERE conversation_id = ${conversationId}
   `) as { next_position: number };
   return row.next_position;
 }
 
 function insertMessage(
   executor: DbExecutor,
+  scope: ChatStorageScope,
   input: {
     id: string;
     conversationId: string;
@@ -347,8 +453,9 @@ function insertMessage(
     now: number;
   }
 ): void {
+  const tables = chatTables(scope);
   executor.run(sql`
-    INSERT INTO chat_messages (
+    INSERT INTO ${tables.messages} (
       id, conversation_id, position, role, content, status, error,
       parent_message_id, generation_id, created_at, updated_at
     ) VALUES (
@@ -418,10 +525,57 @@ function selectModelContext(input: ChatTurn[]): { messages: ChatTurn[]; contextL
   return { messages, contextLimited: !sameTurns(input, messages) };
 }
 
+export function createStandaloneChatConversation(docsRoot: string): ChatHistoryPayload {
+  if (!docsRoot.trim() || !path.isAbsolute(docsRoot) || path.normalize(docsRoot) !== docsRoot || docsRoot.includes("\0")) {
+    throw new ChatHistoryError("独立聊天服务根目录无效", 400);
+  }
+  ensureChatHistorySchema();
+  const db = getDb();
+  const conversationId = randomUUID();
+  const scope: ChatStorageScope = { kind: "standalone", docsRoot, conversationId };
+
+  return db.transaction((tx) => {
+    const now = Date.now();
+    tx.run(sql`
+      INSERT INTO standalone_chat_conversations (
+        id, docs_root, doc_path, repository_path, last_revision,
+        active_generation_id, active_revision, lease_expires_at, lease_duration_ms,
+        created_at, updated_at
+      ) VALUES (
+        ${conversationId}, ${docsRoot}, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, ${now}, ${now}
+      )
+    `);
+    const conversation = getConversationByScopeId(tx, scope, conversationId);
+    if (!conversation) {
+      throw new ChatHistoryError("无法创建独立聊天会话", 500);
+    }
+    return makeHistoryPayload(conversation, [], null, false);
+  }, { behavior: "immediate" });
+}
+
+export function getStandaloneChatHistory(identity: StandaloneChatIdentity, beforeMessageId?: string): ChatHistoryPayload {
+  assertStandaloneIdentity(identity);
+  ensureChatHistorySchema();
+  const db = getDb();
+  const scope = standaloneScope(identity);
+
+  return db.transaction((tx) => {
+    const conversation = getConversationByScopeId(tx, scope, identity.conversationId);
+    if (!conversation) {
+      throw new ChatHistoryError("找不到该聊天会话", 404);
+    }
+    const current = recoverExpiredLease(tx, scope, conversation, Date.now());
+    const page = getHistoryPage(tx, scope, current.id, beforeMessageId);
+    return makeHistoryPayload(current, page.rows, null, page.hasMore);
+  }, { behavior: "immediate" });
+}
+
 export function getDocumentChatHistory(document: ChatDocumentIdentity, beforeMessageId?: string): ChatHistoryPayload {
   assertDocumentIdentity(document);
   ensureChatHistorySchema();
   const db = getDb();
+  const scope = documentScope(document);
 
   return db.transaction((tx) => {
     const now = Date.now();
@@ -433,31 +587,47 @@ export function getDocumentChatHistory(document: ChatDocumentIdentity, beforeMes
       return makeHistoryPayload(null, [], document, false);
     }
 
-    const current = recoverExpiredLease(tx, conversation, now);
-    tx.run(sql`UPDATE chat_conversations SET repository_path = ${document.repositoryPath} WHERE id = ${current.id}`);
-    const page = getHistoryPage(tx, current.id, beforeMessageId);
+    const current = recoverExpiredLease(tx, scope, conversation, now);
+    tx.run(sql`
+      UPDATE chat_conversations
+      SET repository_path = ${document.repositoryPath}
+      WHERE id = ${current.id} AND docs_root = ${document.docsRoot}
+    `);
+    const page = getHistoryPage(tx, scope, current.id, beforeMessageId);
     return makeHistoryPayload(current, page.rows, document, page.hasMore);
   }, { behavior: "immediate" });
 }
 
-export function beginDocumentChatTurn(
-  document: ChatDocumentIdentity,
-  request: DocumentChatRequest,
+function beginChatTurn(
+  scope: ChatStorageScope,
+  document: ChatDocumentIdentity | null,
+  request: ChatRequest,
   leaseDurationMs: number
 ): ChatGeneration {
-  assertDocumentIdentity(document);
   if (!Number.isSafeInteger(leaseDurationMs) || leaseDurationMs <= 0) {
     throw new ChatHistoryError("生成租约时长必须是正整数", 400);
   }
+  if ((scope.kind === "document") !== Boolean(document)) {
+    throw new ChatHistoryError("聊天会话身份无效", 400);
+  }
   ensureChatHistorySchema();
   const db = getDb();
+  const tables = chatTables(scope);
 
   return db.transaction((tx) => {
     const now = Date.now();
-    let conversation = ensureConversation(tx, document, now);
-    conversation = recoverExpiredLease(tx, conversation, now);
+    let conversation: ConversationRow;
+    if (document) {
+      conversation = ensureConversation(tx, document, now);
+    } else {
+      if (!scope.conversationId) throw new ChatHistoryError("聊天会话 ID 无效", 400);
+      const existing = getConversationByScopeId(tx, scope, scope.conversationId);
+      if (!existing) throw new ChatHistoryError("找不到该聊天会话", 404);
+      conversation = existing;
+    }
+    conversation = recoverExpiredLease(tx, scope, conversation, now);
     if (conversation.active_generation_id) {
-      throw new ChatHistoryError("该文档已有正在进行的生成任务", 409);
+      throw new ChatHistoryError(scope.kind === "document" ? "该文档已有正在进行的生成任务" : "该聊天会话已有正在进行的生成任务", 409);
     }
 
     const generationId = randomUUID();
@@ -466,8 +636,11 @@ export function beginDocumentChatTurn(
     let contextLimited = false;
 
     if (request.action === "summary") {
+      if (!document || scope.kind !== "document") {
+        throw new ChatHistoryError("独立聊天不支持概述", 400);
+      }
       const existingMessage = tx.get<{ id: string }>(sql`
-        SELECT id FROM chat_messages WHERE conversation_id = ${conversation.id} LIMIT 1
+        SELECT id FROM ${tables.messages} WHERE conversation_id = ${conversation.id} LIMIT 1
       `);
       if (existingMessage) {
         throw new ChatHistoryError("该文档已有聊天记录，不能重复生成概述", 409);
@@ -475,10 +648,10 @@ export function beginDocumentChatTurn(
 
       assistantMessageId = randomUUID();
       messages = [];
-      insertMessage(tx, {
+      insertMessage(tx, scope, {
         id: assistantMessageId,
         conversationId: conversation.id,
-        position: nextMessagePosition(tx, conversation.id),
+        position: nextMessagePosition(tx, scope, conversation.id),
         role: "assistant",
         content: "",
         status: "pending",
@@ -494,15 +667,15 @@ export function beginDocumentChatTurn(
         throw new ChatHistoryError(`每个问题不能超过 ${MAX_QUESTION_CHARS} 个字符`, 413);
       }
 
-      const context = getContextRows(tx, conversation.id);
+      const context = getContextRows(tx, scope, conversation.id);
       const input = [...buildModelHistory(context.rows), { role: "user" as const, content: request.content }];
       ({ messages, contextLimited } = selectModelContext(input));
       contextLimited ||= context.hasEarlierMessages;
 
       const userMessageId = randomUUID();
       assistantMessageId = randomUUID();
-      const position = nextMessagePosition(tx, conversation.id);
-      insertMessage(tx, {
+      const position = nextMessagePosition(tx, scope, conversation.id);
+      insertMessage(tx, scope, {
         id: userMessageId,
         conversationId: conversation.id,
         position,
@@ -513,7 +686,7 @@ export function beginDocumentChatTurn(
         generationId: null,
         now
       });
-      insertMessage(tx, {
+      insertMessage(tx, scope, {
         id: assistantMessageId,
         conversationId: conversation.id,
         position: position + 1,
@@ -526,12 +699,12 @@ export function beginDocumentChatTurn(
       });
     } else {
       const target = tx.get<MessageRow>(sql`
-        SELECT * FROM chat_messages
+        SELECT * FROM ${tables.messages}
         WHERE conversation_id = ${conversation.id} AND id = ${request.messageId}
         LIMIT 1
       `) as MessageRow | undefined;
       const lastMessage = tx.get<{ id: string }>(sql`
-        SELECT id FROM chat_messages WHERE conversation_id = ${conversation.id}
+        SELECT id FROM ${tables.messages} WHERE conversation_id = ${conversation.id}
         ORDER BY position DESC LIMIT 1
       `) as { id: string } | undefined;
       if (
@@ -540,13 +713,15 @@ export function beginDocumentChatTurn(
         target.role !== "assistant" ||
         (target.status !== "error" && target.status !== "stopped")
       ) {
-        throw new ChatHistoryError("只能重试该文档最后一条失败或已停止的助手消息", 409);
+        throw new ChatHistoryError(scope.kind === "document"
+          ? "只能重试该文档最后一条失败或已停止的助手消息"
+          : "只能重试该会话最后一条失败或已停止的助手消息", 409);
       }
 
       if (target.parent_message_id) {
-        const context = getContextRows(tx, conversation.id, target.position);
+        const context = getContextRows(tx, scope, conversation.id, target.position);
         const userMessage = tx.get<MessageRow>(sql`
-          SELECT * FROM chat_messages
+          SELECT * FROM ${tables.messages}
           WHERE conversation_id = ${conversation.id} AND id = ${target.parent_message_id}
           LIMIT 1
         `) as MessageRow | undefined;
@@ -558,15 +733,18 @@ export function beginDocumentChatTurn(
         ({ messages, contextLimited } = selectModelContext(messages));
         contextLimited ||= context.hasEarlierMessages;
       } else {
+        if (!document) {
+          throw new ChatHistoryError("无法恢复要重试的问题", 409);
+        }
         // Summary retries start a fresh summary generation and never reuse old summary text.
         messages = [];
       }
 
       assistantMessageId = randomUUID();
-      insertMessage(tx, {
+      insertMessage(tx, scope, {
         id: assistantMessageId,
         conversationId: conversation.id,
-        position: nextMessagePosition(tx, conversation.id),
+        position: nextMessagePosition(tx, scope, conversation.id),
         role: "assistant",
         content: "",
         status: "pending",
@@ -576,24 +754,38 @@ export function beginDocumentChatTurn(
       });
     }
 
-    tx.run(sql`
-      UPDATE chat_conversations
-      SET repository_path = ${document.repositoryPath},
-          active_generation_id = ${generationId},
-          active_revision = ${document.revision},
-          lease_expires_at = ${now + leaseDurationMs},
-          lease_duration_ms = ${leaseDurationMs},
-          updated_at = ${now}
-      WHERE id = ${conversation.id}
-    `);
+    if (document) {
+      tx.run(sql`
+        UPDATE ${tables.conversations}
+        SET repository_path = ${document.repositoryPath},
+            active_generation_id = ${generationId},
+            active_revision = ${document.revision},
+            lease_expires_at = ${now + leaseDurationMs},
+            lease_duration_ms = ${leaseDurationMs},
+            updated_at = ${now}
+        WHERE id = ${conversation.id} AND docs_root = ${scope.docsRoot}
+      `);
+    } else {
+      tx.run(sql`
+        UPDATE ${tables.conversations}
+        SET active_generation_id = ${generationId},
+            active_revision = NULL,
+            lease_expires_at = ${now + leaseDurationMs},
+            lease_duration_ms = ${leaseDurationMs},
+            updated_at = ${now}
+        WHERE id = ${conversation.id} AND docs_root = ${scope.docsRoot}
+      `);
+    }
 
-    const updatedConversation = getConversationById(tx, conversation.id);
+    const updatedConversation = getConversationByScopeId(tx, scope, conversation.id);
     if (!updatedConversation) {
       throw new ChatHistoryError("无法读取新建的聊天记录", 500);
     }
 
-    const latestPage = getHistoryPage(tx, conversation.id);
+    const latestPage = getHistoryPage(tx, scope, conversation.id);
     return {
+      scope: scope.kind,
+      docsRoot: scope.docsRoot,
       conversationId: conversation.id,
       generationId,
       assistantMessageId,
@@ -604,23 +796,46 @@ export function beginDocumentChatTurn(
   }, { behavior: "immediate" });
 }
 
-export function appendDocumentChatDelta(generation: ChatGeneration, text: string): boolean {
+export function beginDocumentChatTurn(
+  document: ChatDocumentIdentity,
+  request: DocumentChatRequest,
+  leaseDurationMs: number
+): ChatGeneration {
+  assertDocumentIdentity(document);
+  return beginChatTurn(documentScope(document), document, request, leaseDurationMs);
+}
+
+export function beginStandaloneChatTurn(
+  identity: StandaloneChatIdentity,
+  request: StandaloneChatRequest,
+  leaseDurationMs: number
+): ChatGeneration {
+  assertStandaloneIdentity(identity);
+  if (request.conversationId !== identity.conversationId) {
+    throw new ChatHistoryError("找不到该聊天会话", 404);
+  }
+  return beginChatTurn(standaloneScope(identity), null, request, leaseDurationMs);
+}
+
+export function appendChatDelta(generation: ChatGeneration, text: string): boolean {
   ensureChatHistorySchema();
   const db = getDb();
+  const scope: ChatStorageScope = { kind: generation.scope, docsRoot: generation.docsRoot };
+  const tables = chatTables(scope);
 
   return db.transaction((tx) => {
     const now = Date.now();
-    const conversation = getConversationById(tx, generation.conversationId);
+    const conversation = getConversationByScopeId(tx, scope, generation.conversationId);
     if (!conversation || conversation.active_generation_id !== generation.generationId) {
       return false;
     }
 
     if (conversation.lease_expires_at === null || conversation.lease_expires_at <= now) {
-      recoverExpiredLease(tx, conversation, now);
+      recoverExpiredLease(tx, scope, conversation, now);
       return false;
     }
 
-    const message = getAssistantForGeneration(tx, generation.conversationId, generation.generationId);
+    const message = getAssistantForGeneration(tx, scope, generation.conversationId, generation.generationId);
     if (!message || (message.status !== "pending" && message.status !== "streaming")) {
       return false;
     }
@@ -630,66 +845,73 @@ export function appendDocumentChatDelta(generation: ChatGeneration, text: string
     }
 
     if (message.content.length + text.length > MAX_CHAT_MESSAGE_CHARS) {
-      clearConversationLease(tx, generation.conversationId, now, "error", REPLY_LIMIT_MESSAGE);
+      clearConversationLease(tx, scope, generation.conversationId, now, "error", REPLY_LIMIT_MESSAGE);
       return false;
     }
 
     const leaseDurationMs = conversation.lease_duration_ms ?? 1;
     tx.run(sql`
-      UPDATE chat_messages
+      UPDATE ${tables.messages}
       SET content = content || ${text}, status = 'streaming', updated_at = ${now}
       WHERE id = ${message.id} AND generation_id = ${generation.generationId}
     `);
     tx.run(sql`
-      UPDATE chat_conversations
+      UPDATE ${tables.conversations}
       SET lease_expires_at = ${now + leaseDurationMs}, updated_at = ${now}
-      WHERE id = ${generation.conversationId} AND active_generation_id = ${generation.generationId}
+      WHERE id = ${generation.conversationId} AND docs_root = ${scope.docsRoot}
+        AND active_generation_id = ${generation.generationId}
     `);
     return true;
   }, { behavior: "immediate" });
 }
 
-export function finishDocumentChatTurn(
+export function finishChatTurn(
   generation: ChatGeneration,
   status: "complete" | "stopped" | "error",
   errorMessage?: string
 ): void {
   ensureChatHistorySchema();
   const db = getDb();
+  const scope: ChatStorageScope = { kind: generation.scope, docsRoot: generation.docsRoot };
+  const tables = chatTables(scope);
 
   db.transaction((tx) => {
     const now = Date.now();
-    const conversation = getConversationById(tx, generation.conversationId);
+    const conversation = getConversationByScopeId(tx, scope, generation.conversationId);
     if (!conversation || conversation.active_generation_id !== generation.generationId) {
       return;
     }
 
     if (conversation.lease_expires_at === null || conversation.lease_expires_at <= now) {
-      recoverExpiredLease(tx, conversation, now);
+      recoverExpiredLease(tx, scope, conversation, now);
       return;
     }
 
-    const assistant = getAssistantForGeneration(tx, generation.conversationId, generation.generationId);
+    const assistant = getAssistantForGeneration(tx, scope, generation.conversationId, generation.generationId);
     if (!assistant || (assistant.status !== "pending" && assistant.status !== "streaming")) {
-      clearConversationLease(tx, generation.conversationId, now, status, errorMessage ?? null);
+      clearConversationLease(tx, scope, generation.conversationId, now, status, errorMessage ?? null);
       return;
     }
 
     const terminalError = status === "error" ? errorMessage ?? "生成失败" : errorMessage ?? null;
     tx.run(sql`
-      UPDATE chat_messages
+      UPDATE ${tables.messages}
       SET status = ${status}, error = ${terminalError}, updated_at = ${now}
       WHERE id = ${assistant.id} AND generation_id = ${generation.generationId}
     `);
     tx.run(sql`
-      UPDATE chat_conversations
+      UPDATE ${tables.conversations}
       SET last_revision = CASE WHEN ${status} = 'complete' THEN active_revision ELSE last_revision END,
           active_generation_id = NULL,
           active_revision = NULL,
           lease_expires_at = NULL,
           lease_duration_ms = NULL,
           updated_at = ${now}
-      WHERE id = ${generation.conversationId} AND active_generation_id = ${generation.generationId}
+      WHERE id = ${generation.conversationId} AND docs_root = ${scope.docsRoot}
+        AND active_generation_id = ${generation.generationId}
     `);
   }, { behavior: "immediate" });
 }
+
+export const appendDocumentChatDelta = appendChatDelta;
+export const finishDocumentChatTurn = finishChatTurn;

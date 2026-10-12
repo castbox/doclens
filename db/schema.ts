@@ -97,3 +97,40 @@ export const chatMessages = sqliteTable(
     index("chat_messages_generation_idx").on(table.generationId)
   ]
 );
+
+export const standaloneChatConversations = sqliteTable("standalone_chat_conversations", {
+  id: text("id").primaryKey(),
+  docsRoot: text("docs_root").notNull(),
+  docPath: text("doc_path"),
+  repositoryPath: text("repository_path"),
+  lastRevision: text("last_revision"),
+  activeGenerationId: text("active_generation_id"),
+  activeRevision: text("active_revision"),
+  leaseExpiresAt: integer("lease_expires_at"),
+  leaseDurationMs: integer("lease_duration_ms"),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull()
+});
+
+export const standaloneChatMessages = sqliteTable(
+  "standalone_chat_messages",
+  {
+    id: text("id").primaryKey(),
+    conversationId: text("conversation_id")
+      .notNull()
+      .references(() => standaloneChatConversations.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    role: text("role").notNull(),
+    content: text("content").notNull().default(""),
+    status: text("status").notNull(),
+    error: text("error"),
+    parentMessageId: text("parent_message_id"),
+    generationId: text("generation_id"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull()
+  },
+  (table) => [
+    uniqueIndex("standalone_chat_messages_conversation_position_uidx").on(table.conversationId, table.position),
+    index("standalone_chat_messages_generation_idx").on(table.generationId)
+  ]
+);

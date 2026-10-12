@@ -1,0 +1,58 @@
+{
+  "viewport": {
+    "width": 375,
+    "height": 812
+  },
+  "document": {
+    "clientWidth": 375,
+    "scrollWidth": 375
+  },
+  "appbar": {
+    "x": 0,
+    "y": 0,
+    "width": 364,
+    "height": 94
+  },
+  "buttons": [
+    {
+      "name": "新建聊天",
+      "rect": {
+        "x": 9,
+        "y": 43,
+        "width": 96,
+        "height": 44
+      },
+      "disabled": false
+    },
+    {
+      "name": "展开目录",
+      "rect": {
+        "x": 109,
+        "y": 43,
+        "width": 96,
+        "height": 44
+      },
+      "disabled": false
+    },
+    {
+      "name": "搜索页",
+      "rect": {
+        "x": 209,
+        "y": 43,
+        "width": 64,
+        "height": 44
+      },
+      "disabled": false
+    },
+    {
+      "name": "审阅列表",
+      "rect": {
+        "x": 277,
+        "y": 43,
+        "width": 72,
+        "height": 44
+      },
+      "disabled": false
+    }
+  ]
+}

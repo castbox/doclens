@@ -1,0 +1,31 @@
+{
+  "status": 200,
+  "conversationId": "d14489b1-a017-42e0-a7ff-cae296c28907",
+  "isGenerating": false,
+  "messages": [
+    {
+      "role": "user",
+      "status": "complete",
+      "contentLength": 4,
+      "error": null
+    },
+    {
+      "role": "assistant",
+      "status": "complete",
+      "contentLength": 17,
+      "error": null
+    },
+    {
+      "role": "user",
+      "status": "complete",
+      "contentLength": 4,
+      "error": null
+    },
+    {
+      "role": "assistant",
+      "status": "stopped",
+      "contentLength": 456,
+      "error": null
+    }
+  ]
+}

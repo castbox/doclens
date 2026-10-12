@@ -1,0 +1,54 @@
+- generic [ref=e1] [box=0,0,1200,919]:
+  - alert [ref=e2] [box=-1,-1,1,1]
+  - generic [ref=e3] [box=0,0,1200,919]:
+    - banner [ref=e4] [box=0,0,1200,66]:
+      - generic [ref=e6] [box=13,11,1174,44]:
+        - generic [ref=e7] [box=13,17,249,32]:
+          - heading "DocLens" [level=6] [ref=e252] [box=13,17,76,32]
+          - generic [ref=e9] [box=99,23,163,20]: Docs 浏览 + 搜索 + 审阅工作台
+        - generic [ref=e10] [box=835,11,352,44]:
+          - button "新建聊天" [ref=e253] [cursor=pointer] [box=835,11,96,44]
+          - button "收起目录" [active] [ref=e260] [cursor=pointer] [box=939,11,96,44]
+          - link "搜索页" [ref=e255] [cursor=pointer] [box=1043,11,64,44]:
+            - /url: /search
+          - link "审阅列表" [ref=e256] [cursor=pointer] [box=1115,11,72,44]:
+            - /url: /reviews
+    - generic [ref=e261] [box=0,66,320,853]:
+      - generic [ref=e262] [box=11,77,298,31]:
+        - heading "Docs 目录" [level=6] [ref=e263] [box=11,78,72,28]
+        - button "收起" [ref=e264] [cursor=pointer] [box=245,77,64,31]
+      - separator [ref=e265] [box=11,116,298,1]
+      - tablist [ref=e268] [box=11,125,298,42]:
+        - tab "目录树" [selected] [ref=e269] [cursor=pointer] [box=11,125,149,42]
+        - tab "星标文档" [ref=e270] [cursor=pointer] [box=160,125,149,42]
+      - generic [ref=e272] [box=11,174,298,98]:
+        - generic [ref=e274] [box=11,174,298,40]:
+          - textbox "filter docs tree" [ref=e275] [box=11,174,298,40]:
+            - /placeholder: 筛选目录/文件
+          - group [aria-hidden] [box=11,169,298,45]
+        - list [ref=e276] [box=11,222,298,50]:
+          - button "guide.md" [ref=e277] [cursor=pointer] [box=11,222,296,47]
+    - generic [ref=e25] [box=347,87,462,106]:
+      - heading "请选择文件" [level=6] [ref=e257] [box=372,112,412,28]
+      - paragraph [ref=e27] [box=372,146,412,22]: 从左侧目录树选择一个文档开始预览
+    - generic [ref=e28] [box=840,66,360,853]:
+      - generic [ref=e29] [box=851,77,338,153]:
+        - generic [ref=e30] [box=851,77,338,40]:
+          - heading "PR 文件面板" [level=6] [ref=e31] [box=851,83,89,28]
+          - generic [ref=e32] [box=1081,77,108,40]:
+            - generic "刷新最新 PR 文件" [ref=e33] [box=1081,77,40,40]
+            - button "收起" [ref=e37] [cursor=pointer] [box=1125,82,64,31]
+        - separator [ref=e38] [box=851,125,338,1]
+        - tablist [ref=e41] [box=851,134,338,42]:
+          - tab "全部文件 0" [selected] [ref=e42] [cursor=pointer] [box=851,134,169,42]
+          - tab "星标文档 0" [ref=e43] [cursor=pointer] [box=1020,134,169,42]
+        - generic [ref=e45] [box=851,184,338,40]:
+          - generic [ref=e46] [box=851,184,140,40]:
+            - generic [box=865,193,32,23]: 类别
+            - generic [ref=e47] [box=851,184,140,40]
+          - generic [ref=e49] [box=997,184,130,40]:
+            - generic [ref=e50] [box=1011,175,48,17]: 已读状态
+            - generic [ref=e51] [box=997,184,130,40]
+      - generic [ref=e54] [box=851,230,335,106]:
+        - heading "暂无 PR 文件" [level=6] [ref=e55] [box=876,255,285,28]
+        - paragraph [ref=e56] [box=876,289,285,22]: 请检查 docs/pr 目录是否存在文件

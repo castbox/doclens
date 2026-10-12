@@ -1,0 +1,46 @@
+{
+  "phase": "final-mobile-open",
+  "viewport": {
+    "width": 320,
+    "height": 812
+  },
+  "page": {
+    "clientWidth": 320,
+    "scrollWidth": 320
+  },
+  "dialog": {
+    "x": 0,
+    "y": 0,
+    "width": 320,
+    "height": 812
+  },
+  "dialogTitle": "新建聊天",
+  "body": true,
+  "log": {
+    "clientWidth": 309,
+    "scrollWidth": 309
+  },
+  "main": {
+    "clientWidth": 320,
+    "scrollWidth": 320
+  },
+  "input": {
+    "exists": true,
+    "placeholder": "输入消息…",
+    "aria": "输入消息",
+    "focused": true,
+    "rect": {
+      "x": 21,
+      "y": 669.8,
+      "width": 278,
+      "height": 25
+    }
+  },
+  "header": {
+    "x": 0,
+    "y": 0,
+    "width": 320,
+    "height": 128.8
+  },
+  "focusTag": "TEXTAREA"
+}

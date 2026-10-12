@@ -1,0 +1,131 @@
+{
+  "task": "FR-16 顶部新建独立聊天入口",
+  "phase": "最终隔离浏览器验收",
+  "result": "核心功能通过；移动端目录抽屉状态受既有逻辑限制，无法验证展开后的抽屉",
+  "environment": {
+    "app": "http://127.0.0.1:6771/docs",
+    "provider_boundary": "仅连接 127.0.0.1:6772 本地 mock；未调用收费/provider API，未读取 .env",
+    "mock_stats": {
+      "count": 5,
+      "requests": [
+        { "question": "普通测试", "attempt": 1, "documentAttached": false },
+        { "question": "停止测试", "attempt": 1, "documentAttached": false },
+        { "question": "重试测试", "attempt": 1, "documentAttached": false },
+        { "question": "重试测试", "attempt": 2, "documentAttached": false },
+        { "kind": "原文档自动摘要", "attempt": 1, "documentAttached": true }
+      ],
+      "evidence": "T2610121922-new-chat-final-mock-stats.json；只读响应未包含 key 或凭据"
+    }
+  },
+  "checks": [
+    {
+      "name": "无文档时的顶部入口与顺序",
+      "result": "passed",
+      "details": "未选择文档时显示空选择提示；桌面导航中“新建聊天”位于“展开目录”左侧，两按钮均为 96x44 px，无水平溢出。",
+      "evidence": [
+        "T2610121922-new-chat-final-initial.json",
+        "T2610121922-new-chat-final-initial-desktop.png"
+      ]
+    },
+    {
+      "name": "独立空白会话创建与旧记录保留",
+      "result": "passed",
+      "details": "最终版本创建接口返回 201 和空消息历史；连续创建得到不同会话 ID（a08fa0f1-d681-4241-a6b4-f4983a19d3c7、d14489b1-a017-42e0-a7ff-cae296c28907）。第二次创建后，首次会话仍可读取且为空。创建操作没有触发 mock 请求。",
+      "evidence": [
+        "T2610121922-new-chat-final-create-response.json",
+        "T2610121922-new-chat-final-second-create.json",
+        "T2610121922-new-chat-final-first-retained-after-second.json",
+        "T2610121922-new-chat-final-two-create-network.txt"
+      ]
+    },
+    {
+      "name": "独立聊天发送、停止与重试",
+      "result": "passed",
+      "details": "发送请求只携带 conversationId/action/content；普通回复保存成功。流式回答可停止并以 stopped 状态保存。重试第一次得到 mock 503，点击重试后成功；历史保留单条用户消息及两次 assistant 尝试。所有独立聊天请求均 documentAttached=false。",
+      "evidence": [
+        "T2610121922-new-chat-final-send-request.json",
+        "T2610121922-new-chat-final-send-history.json",
+        "T2610121922-new-chat-final-stop-history.json",
+        "T2610121922-new-chat-final-stop-saved.yml",
+        "T2610121922-new-chat-final-retry-first-failure.yml",
+        "T2610121922-new-chat-final-retry-success.yml",
+        "T2610121922-new-chat-final-after-retry-history.json",
+        "T2610121922-new-chat-final-retry-network.txt"
+      ]
+    },
+    {
+      "name": "原文档聊天隔离",
+      "result": "passed",
+      "details": "选中 guide.md 后创建独立聊天获得新会话 ID；创建前后原文档聊天的 conversationId、messageId 和内容保持一致。mock 记录到的文档摘要请求属于此前原文档聊天，独立会话请求没有附加文档。",
+      "evidence": [
+        "T2610121922-new-chat-final-doc-history-before.json",
+        "T2610121922-new-chat-final-doc-selected-create.json",
+        "T2610121922-new-chat-final-doc-selected-history.json",
+        "T2610121922-new-chat-final-doc-history-after-standalone.json",
+        "T2610121922-new-chat-final-doc-selected-standalone.yml"
+      ]
+    },
+    {
+      "name": "既有目录、搜索和审阅导航",
+      "result": "passed",
+      "details": "桌面目录树展开并可选择 guide.md；搜索页与审阅列表导航均可到达，原交互保留。",
+      "evidence": [
+        "T2610121922-new-chat-final-docs-drawer.yml",
+        "T2610121922-new-chat-final-doc-preview.yml",
+        "T2610121922-new-chat-final-search-nav.yml",
+        "T2610121922-new-chat-final-reviews-nav.yml"
+      ]
+    },
+    {
+      "name": "320/375 宽度聊天布局",
+      "result": "passed",
+      "details": "聊天对话框在 320x812 和 375x812 均铺满视口；文档及聊天记录 scrollWidth 等于 clientWidth；输入框 placeholder/aria 正确且打开后获得焦点。",
+      "evidence": [
+        "T2610121922-new-chat-final-mobile-320.json",
+        "T2610121922-new-chat-final-mobile-320.png",
+        "T2610121922-new-chat-final-mobile-375.json",
+        "T2610121922-new-chat-final-mobile-375.png"
+      ]
+    },
+    {
+      "name": "键盘创建及关闭后的焦点恢复",
+      "result": "passed",
+      "details": "320x812 下聚焦“新建聊天”后按 Enter 打开聊天，再按 Escape 关闭；焦点恢复到新建按钮，dialog 已关闭，document scrollWidth 为 320。",
+      "evidence": [
+        "T2610121922-new-chat-final-keyboard-before.json",
+        "T2610121922-new-chat-final-keyboard-open.json",
+        "T2610121922-new-chat-final-focus-return-fixed-320.json"
+      ]
+    },
+    {
+      "name": "320/375 移动端目录抽屉顶部",
+      "result": "limited_by_existing_behavior",
+      "details": "两种宽度下均从刷新后的 /docs 单击一次“展开目录”，按钮仍为“展开目录”，Drawer 保持 hidden，无法观察展开态。只读检查发现 DocsWorkspace.tsx:288-292 的既有 effect 在 !isMdUp 且 docsDrawerOpen 时立即 setDocsDrawerOpen(false)。隐藏抽屉的 top 数值恰与 header 底部一致（320:129px；375:94px），页面无水平溢出；本次未修改此逻辑。",
+      "evidence": [
+        "T2610121922-new-chat-final-drawer-top-320.json",
+        "T2610121922-new-chat-final-drawer-top-375.json"
+      ]
+    }
+  ],
+  "initial_regression": {
+    "result": "fixed_and_retested",
+    "details": "首轮 POST /api/chat/conversations 因空 ReadableStream 判定返回 400；修复后最终浏览器回放返回 201。",
+    "evidence": [
+      "T2610121922-new-chat-create-failure-response.json",
+      "T2610121922-new-chat-final-create-response.json"
+    ]
+  },
+  "console_notes": {
+    "details": "重试流程中的首个 503 是本地 mock 的预设失败，随后第二次重试成功。首轮 console 还记录了既存 favicon.ico 404 及修复前的创建接口 400；400 已在最终回放中修复，favicon 404 不属于本次聊天变更。",
+    "evidence": [
+      "T2610121922-new-chat-final-retry-first-failure.yml",
+      "T2610121922-new-chat-final-retry-success.yml",
+      "T2610121922-new-chat-open-console.txt"
+    ]
+  },
+  "parent_validation": {
+    "build": "pnpm build passed",
+    "tests": "Vitest 23 files / 194 tests passed",
+    "source_snapshot": "parent reported 158 source files byte-identical between workspace and isolated snapshot"
+  }
+}
