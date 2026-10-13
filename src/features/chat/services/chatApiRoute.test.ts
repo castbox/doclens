@@ -462,22 +462,36 @@ describe("POST /api/chat route 安全边界", () => {
     expect(openDocumentChatMock).not.toHaveBeenCalled();
   });
 
-  it("拒绝超过 512 KiB 的实际请求体，即使客户端未声明 Content-Length", async () => {
+  it("接受约 600 KiB 的转义 100K 问题，并拒绝超过 1 MiB 的实际请求体", async () => {
+    const content = "\u0001".repeat(100_000);
+    const validBody = JSON.stringify({ path: "guide.md", action: "send", content });
+    const validBodyBytes = new TextEncoder().encode(validBody).byteLength;
+    expect(validBodyBytes).toBeGreaterThan(524_288);
+    expect(validBodyBytes).toBeLessThanOrEqual(1_048_576);
+
+    const accepted = await POST(request(validBody));
+    expect(accepted.status).toBe(200);
+    expect(openDocumentChatMock).toHaveBeenCalledWith(
+      { path: "guide.md", action: "send", content },
+      expect.any(AbortSignal)
+    );
+
     const body = JSON.stringify({
       path: "guide.md",
       action: "summary",
-      padding: "x".repeat(524_288)
+      padding: "x".repeat(1_048_576)
     });
-    expect(new TextEncoder().encode(body).byteLength).toBeGreaterThan(524_288);
+    expect(new TextEncoder().encode(body).byteLength).toBeGreaterThan(1_048_576);
 
     const response = await POST(request(body));
 
     expect(response.status).toBe(413);
-    expect(openDocumentChatMock).not.toHaveBeenCalled();
+    expect(await response.json()).toEqual({ error: "请求内容超过 1 MiB 限制。" });
+    expect(openDocumentChatMock).toHaveBeenCalledOnce();
   });
 
   it("对声明超限的请求体提前返回 413", async () => {
-    const response = await POST(request("{}", { "content-length": "524289" }));
+    const response = await POST(request("{}", { "content-length": "1048577" }));
 
     expect(response.status).toBe(413);
     expect(openDocumentChatMock).not.toHaveBeenCalled();

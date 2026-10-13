@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ChatHistoryPayload, DocumentChatRequest } from "@/features/chat/domain/types";
+import { MAX_QUESTION_CHARS, type ChatHistoryPayload, type DocumentChatRequest } from "@/features/chat/domain/types";
 import {
   ChatClientError,
   createStandaloneChat,
@@ -81,7 +81,8 @@ describe("loadDocumentChatHistory", () => {
       [{ id: "message-1", role: "system", content: "不接受", status: "complete", error: null }],
       [{ id: "message-1", role: "user", content: "问题", status: "queued", error: null }],
       [{ id: "", role: "user", content: "问题", status: "complete", error: null }],
-      [{ id: "message-1", role: "user", content: "x".repeat(32_001), status: "complete", error: null }],
+      [{ id: "message-1", role: "user", content: "x".repeat(100_001), status: "complete", error: null }],
+      [{ id: "message-2", role: "assistant", content: "x".repeat(32_001), status: "complete", error: null }],
       Array.from({ length: 41 }, (_, index) => ({
         id: `message-${index}`,
         role: "user",
@@ -108,7 +109,7 @@ describe("loadDocumentChatHistory", () => {
   });
 
   it("拒绝超过合理大小的 history body", async () => {
-    const messages = Array.from({ length: 20 }, (_, index) => ({
+    const messages = Array.from({ length: 40 }, (_, index) => ({
       id: `message-${index}`,
       role: index % 2 === 0 ? "user" : "assistant",
       content: "x".repeat(30_000),
@@ -116,6 +117,7 @@ describe("loadDocumentChatHistory", () => {
       error: null
     }));
     const oversizedJson = JSON.stringify({ ...emptyHistory, messages });
+    expect(new TextEncoder().encode(oversizedJson).byteLength).toBeGreaterThan(1_048_576);
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(oversizedJson, {
       status: 200,
       headers: { "content-type": "application/json" }
@@ -161,9 +163,62 @@ describe("standalone chat client", () => {
       expect.objectContaining({ method: "GET", cache: "no-store" })
     );
   });
+
+  it("读取含完整 100K 用户消息的转义 JSON history", async () => {
+    const content = "\u0001".repeat(100_000);
+    const history = {
+      ...emptyHistory,
+      conversationId: "conversation-1",
+      messages: [{ id: "user-long", role: "user", content, status: "complete", error: null }]
+    };
+    const body = JSON.stringify(history);
+    const bodyBytes = new TextEncoder().encode(body).byteLength;
+    expect(bodyBytes).toBeGreaterThan(524_288);
+    expect(bodyBytes).toBeLessThanOrEqual(1_048_576);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(body, {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    })));
+
+    await expect(loadStandaloneChatHistory("conversation-1", {
+      signal: new AbortController().signal
+    })).resolves.toMatchObject({
+      conversationId: "conversation-1",
+      messages: [{ id: "user-long", role: "user", content, status: "complete" }]
+    });
+  });
 });
 
 describe("streamDocumentChat", () => {
+  it("在 SSE history 和 done 事件中接收完整 100K 用户消息", async () => {
+    const content = "\u0001".repeat(100_000);
+    const history: ChatHistoryPayload = {
+      ...emptyHistory,
+      conversationId: "conversation-1",
+      messages: [{ id: "user-long", role: "user", content, status: "complete", error: null }]
+    };
+    const frames = [
+      eventData({ type: "history", history }),
+      eventData({ type: "done", history })
+    ];
+    const frameBytes = frames.map((frame) => frame.byteLength);
+    expect(frameBytes.every((byteLength) => byteLength <= 1_048_576)).toBe(true);
+    expect(frameBytes.reduce((total, byteLength) => total + byteLength, 0)).toBeGreaterThan(1_048_576);
+    const wire = frames.map((frame) => new TextDecoder().decode(frame)).join("");
+    const fetchMock = vi.fn().mockResolvedValue(responseFromChunks([new TextEncoder().encode(wire)]));
+    vi.stubGlobal("fetch", fetchMock);
+    const received: ChatHistoryPayload[] = [];
+
+    await streamDocumentChat(request, {
+      signal: new AbortController().signal,
+      onDelta: vi.fn(),
+      onHistory: (value) => received.push(value)
+    });
+
+    expect(received).toHaveLength(2);
+    expect(received[0]?.messages[0]?.content).toBe(content);
+  });
+
   it("流式解析 UTF-8、消息 ID 和 history 元数据，并在带历史的 done 后完成", async () => {
     const source = new TextEncoder().encode(
       `data: ${JSON.stringify({ type: "history", history: emptyHistory })}\r\n\r\ndata: ${JSON.stringify({ type: "delta", messageId: "assistant-1", text: "你好，🌏" })}\r\n\r\ndata: ${JSON.stringify({ type: "done", history: completedHistory })}\r\n\r\n`
@@ -319,11 +374,11 @@ describe("streamDocumentChat", () => {
   it("限制 send 输入长度且不发起请求", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    const oversizedRequest: DocumentChatRequest = { ...request, content: "x".repeat(4_001) };
+    const oversizedRequest: DocumentChatRequest = { ...request, content: "x".repeat(MAX_QUESTION_CHARS + 1) };
 
     await expect(
       streamDocumentChat(oversizedRequest, { signal: new AbortController().signal, onDelta: vi.fn(), onHistory: vi.fn() })
-    ).rejects.toThrow("4000");
+    ).rejects.toThrow("100000");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

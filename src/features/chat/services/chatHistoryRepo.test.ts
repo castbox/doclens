@@ -4,7 +4,7 @@ import path from "node:path";
 import { sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getDb, resetDbClientForTests } from "@/db/client";
-import type { ChatDocumentIdentity, DocumentChatRequest } from "@/features/chat/domain/types";
+import { MAX_CHAT_MESSAGE_CHARS, MAX_QUESTION_CHARS, type ChatDocumentIdentity, type DocumentChatRequest } from "@/features/chat/domain/types";
 import {
   appendChatDelta,
   appendDocumentChatDelta,
@@ -324,6 +324,46 @@ describe("chatHistoryRepo", () => {
     expect(messagesInChronologicalOrder.at(-1)).toMatchObject({ role: "assistant", content: "回答 22" });
   });
 
+  it("完整持久化 100K 问题并在 100K 分页预算内通过游标读取文档和独立历史", () => {
+    const content = "q".repeat(MAX_QUESTION_CHARS);
+    const doc = document();
+    const documentGeneration = beginDocumentChatTurn(
+      doc,
+      { path: doc.path, action: "send", content },
+      5_000
+    );
+    expect(documentGeneration.messages.at(-1)).toEqual({ role: "user", content });
+    expect(documentGeneration.history.messages.find((message) => message.role === "user")?.content).toBe(content);
+    expect(appendChatDelta(documentGeneration, "a".repeat(MAX_CHAT_MESSAGE_CHARS))).toBe(true);
+    finishChatTurn(documentGeneration, "complete");
+
+    const documentLatest = getDocumentChatHistory(doc);
+    expect(documentLatest.hasMore).toBe(true);
+    expect(documentLatest.messages.map((message) => message.role)).toEqual(["assistant"]);
+    const documentOlder = getDocumentChatHistory(doc, documentLatest.messages[0]?.id);
+    expect(documentOlder.messages).toMatchObject([{ role: "user", content }]);
+    expect(documentOlder.messages[0]?.content).toHaveLength(100_000);
+
+    const docsRoot = path.join(tempDir, "docs");
+    const created = createStandaloneChatConversation(docsRoot);
+    const identity = { docsRoot, conversationId: created.conversationId! };
+    const standaloneGeneration = beginStandaloneChatTurn(identity, {
+      conversationId: identity.conversationId,
+      action: "send",
+      content
+    }, 5_000);
+    expect(standaloneGeneration.messages.at(-1)).toEqual({ role: "user", content });
+    expect(appendChatDelta(standaloneGeneration, "a".repeat(MAX_CHAT_MESSAGE_CHARS))).toBe(true);
+    finishChatTurn(standaloneGeneration, "complete");
+
+    const standaloneLatest = getStandaloneChatHistory(identity);
+    expect(standaloneLatest.hasMore).toBe(true);
+    expect(standaloneLatest.messages.map((message) => message.role)).toEqual(["assistant"]);
+    const standaloneOlder = getStandaloneChatHistory(identity, standaloneLatest.messages[0]?.id);
+    expect(standaloneOlder.messages).toMatchObject([{ role: "user", content }]);
+    expect(standaloneOlder.messages[0]?.content).toHaveLength(100_000);
+  });
+
   it("保留失败的空回答行，但后续模型上下文跳过该空问题对", () => {
     const doc = document();
     const failed = beginDocumentChatTurn(doc, { path: doc.path, action: "send", content: "失败问题" }, 5_000);
@@ -360,11 +400,11 @@ describe("chatHistoryRepo", () => {
     }
   });
 
-  it("拒绝超过问题上限的输入且不落盘空占位", () => {
+  it("拒绝超过问题上限的文档和独立输入且不落盘空占位", () => {
     const doc = document();
 
     try {
-      beginDocumentChatTurn(doc, { path: doc.path, action: "send", content: "x".repeat(4_001) }, 5_000);
+      beginDocumentChatTurn(doc, { path: doc.path, action: "send", content: "x".repeat(MAX_QUESTION_CHARS + 1) }, 5_000);
       throw new Error("expected question length error");
     } catch (error) {
       expect(error).toBeInstanceOf(ChatHistoryError);
@@ -372,5 +412,21 @@ describe("chatHistoryRepo", () => {
     }
 
     expect(getDocumentChatHistory(doc)).toMatchObject({ conversationId: null, messages: [], isGenerating: false });
+
+    const docsRoot = path.join(tempDir, "docs");
+    const created = createStandaloneChatConversation(docsRoot);
+    const identity = { docsRoot, conversationId: created.conversationId! };
+    try {
+      beginStandaloneChatTurn(identity, {
+        conversationId: identity.conversationId,
+        action: "send",
+        content: "x".repeat(MAX_QUESTION_CHARS + 1)
+      }, 5_000);
+      throw new Error("expected standalone question length error");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ChatHistoryError);
+      expect((error as ChatHistoryError).status).toBe(413);
+    }
+    expect(getStandaloneChatHistory(identity)).toMatchObject({ messages: [], isGenerating: false });
   });
 });

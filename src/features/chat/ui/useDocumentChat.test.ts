@@ -2,7 +2,7 @@ import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { JSDOM } from "jsdom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ChatHistoryPayload, ChatMessage, ChatRequest } from "../domain/types";
+import { MAX_QUESTION_CHARS, type ChatHistoryPayload, type ChatMessage, type ChatRequest } from "../domain/types";
 import {
   ChatClientError,
   createStandaloneChat,
@@ -593,15 +593,47 @@ describe("useDocumentChat", () => {
     expect(streamMock).not.toHaveBeenCalled();
   });
 
-  it("拒绝超过 4000 字的问题且不创建 provider 请求", async () => {
+  it("允许 4768 字和 100000 字问题完整发送", async () => {
+    expect(MAX_QUESTION_CHARS).toBe(100_000);
+    const initial = await startInitialRead();
+    await resolveHistory(initial, chatHistory([assistant("summary-1", "已有概述")]));
+
+    const content4768 = "x".repeat(4_768);
+    let accepted = true;
+    act(() => {
+      accepted = current.send(content4768);
+    });
+    expect(accepted).toBe(true);
+    expect(pendingStreams[0].request).toMatchObject({ path: "guide.md", action: "send" });
+    const request4768 = pendingStreams[0].request;
+    expect("content" in request4768 ? request4768.content.length : 0).toBe(4_768);
+
+    const contentAtLimit = "y".repeat(MAX_QUESTION_CHARS);
+    await finishStream(pendingStreams[0], "answer-4768", "已收到", chatHistory([
+      assistant("summary-1", "已有概述"),
+      user("user-4768", content4768),
+      assistant("answer-4768", "已收到")
+    ]));
+    act(() => {
+      accepted = current.send(contentAtLimit);
+    });
+    expect(accepted).toBe(true);
+    expect(pendingStreams).toHaveLength(2);
+    expect(pendingStreams[1].request).toMatchObject({ path: "guide.md", action: "send" });
+    const requestAtLimit = pendingStreams[1].request;
+    expect("content" in requestAtLimit ? requestAtLimit.content.length : 0).toBe(100_000);
+  });
+
+  it("拒绝 100000 字上限的下一字符且不创建 provider 请求", async () => {
+    expect(MAX_QUESTION_CHARS).toBe(100_000);
     const initial = await startInitialRead();
     await resolveHistory(initial, chatHistory([assistant("summary-1", "已有概述")]));
     let accepted = true;
     act(() => {
-      accepted = current.send("x".repeat(4_001));
+      accepted = current.send("x".repeat(MAX_QUESTION_CHARS + 1));
     });
     expect(accepted).toBe(false);
     expect(streamMock).not.toHaveBeenCalled();
-    expect(current.error).toContain("4000");
+    expect(current.error).toContain(String(MAX_QUESTION_CHARS));
   });
 });

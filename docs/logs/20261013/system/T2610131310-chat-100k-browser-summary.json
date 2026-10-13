@@ -1,0 +1,102 @@
+{
+  "task": "T2610131310-chat-100k",
+  "result": "PASS",
+  "scope": {
+    "app": "http://127.0.0.1:6773",
+    "provider": "isolated local mock at 127.0.0.1:6774 only",
+    "fixture_docs": "/tmp/doclens-chat-100k-tmkfis_c/fixtures/docs/guide.md",
+    "fixture_database": "/tmp/doclens-chat-100k-tmkfis_c/fixtures/doclens.sqlite",
+    "body_text_saved": false
+  },
+  "baseline": {
+    "mock_count": 1,
+    "reason": "打开空文档聊天会自动产生本地summary；280字符记录为基线，不清理或重置数据库。"
+  },
+  "cases": [
+    {
+      "name": "4768字符浏览器发送",
+      "result": "PASS",
+      "ui_value_length": 4768,
+      "sha256": "6a1d38b65a58e7332639a02cc44026bd6e5f044e3eb09fc5ec0b99e9cb2419f1",
+      "mock_count_after": 2,
+      "upstream_body_bytes": 7115,
+      "document_attached": true,
+      "assistant_reply_seen": true
+    },
+    {
+      "name": "100000字符浏览器发送",
+      "result": "PASS",
+      "ui_value_length": 100000,
+      "counter": "100000 / 100000",
+      "send_enabled": true,
+      "sha256": "7572f8be61469d7d661f13f715581800783290dd80d64a9a96932218fb32b3dc",
+      "mock_count_after": 3,
+      "upstream_body_bytes": 102346,
+      "document_attached": true,
+      "assistant_reply_seen": true
+    },
+    {
+      "name": "100001字符边界拒绝",
+      "result": "PASS",
+      "ui_value_length": 100001,
+      "notice": "超出 1 个字符",
+      "send_disabled": true,
+      "api_status": 400,
+      "api_error": "每个问题不能超过 100000 个字符",
+      "mock_count_before_and_after": 3,
+      "provider_request_created": false,
+      "screenshot": "T2610131310-chat-100k-overlimit.png"
+    },
+    {
+      "name": "escaped控制字符100000字符及600KB传输",
+      "result": "PASS",
+      "character_codepoint": "U+0001",
+      "ui_value_length": 100000,
+      "post_json_bytes": 600048,
+      "sha256": "7afaec9db2d1f347e46eee3af2a29726de4d4a78c6306b0bc2f3f7f859f918eb",
+      "mock_count_after": 4,
+      "upstream_body_bytes": 602346,
+      "mock_sha256_matches": true,
+      "document_attached": true,
+      "assistant_reply_seen": true
+    },
+    {
+      "name": "重新打开文档聊天并读取更早分页",
+      "result": "PASS",
+      "conversation_id": "312eb600-0065-46f1-b350-f6a9481a34aa",
+      "latest_page": {
+        "status": 200,
+        "json_bytes": 291,
+        "has_more": true,
+        "messages": [
+          { "role": "assistant", "chars": 22, "id": "34eeaf07-6d25-4f1f-add5-99af39c55204" }
+        ],
+        "contains_100000_char_user": false
+      },
+      "older_cursor": "34eeaf07-6d25-4f1f-add5-99af39c55204",
+      "older_page": {
+        "status": 200,
+        "json_bytes": 600236,
+        "within_1_mib_limit": true,
+        "greater_than_512_kib": true,
+        "has_more": true,
+        "messages": [
+          {
+            "role": "user",
+            "chars": 100000,
+            "sha256": "7afaec9db2d1f347e46eee3af2a29726de4d4a78c6306b0bc2f3f7f859f918eb",
+            "id": "fb2b4f45-5d2c-4aa7-8e1f-6019a28b634a"
+          }
+        ],
+        "ui_load_earlier_rendered_full_message": true
+      }
+    }
+  ],
+  "evidence_boundary": {
+    "source_edits": false,
+    "provider_calls_outside_local_mock": false,
+    "history_body_or_question_text_logged": false,
+    "existing_mobile_drawer_behavior_checked": false,
+    "sse_cumulative_over_1_mib_parser_case": "covered by specialist unit tests; not repeated in browser"
+  }
+}

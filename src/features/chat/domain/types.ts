@@ -62,11 +62,11 @@ export type ChatStreamEvent =
   | { type: "done"; history: ChatHistoryPayload };
 
 export const MAX_CHAT_MESSAGES = 40;
-export const MAX_QUESTION_CHARS = 4_000;
+export const MAX_QUESTION_CHARS = 100_000;
 export const MAX_CHAT_MESSAGE_CHARS = 32_000;
 export const MAX_CHAT_HISTORY_CHARS = 100_000;
 export const MAX_CHAT_HISTORY_PAGE_MESSAGES = 40;
 export const MAX_CHAT_HISTORY_PAGE_CHARS = 100_000;
 export const MAX_CHAT_DOCUMENT_CHARS = 100_000;
 export const MAX_CHAT_DOCUMENT_BYTES = 524_288;
-export const MAX_CHAT_REQUEST_BYTES = 524_288;
+export const MAX_CHAT_REQUEST_BYTES = 1_048_576;

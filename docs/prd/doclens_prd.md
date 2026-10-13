@@ -235,7 +235,7 @@
 * 去重与并发：所有生成动作先竞争同一文档的数据库 generation lease。已有有效 lease 时拒绝新的上游调用并返回可读忙碌状态；已有历史时重复的 `summary` 只返回已存历史，不产生新的上游调用。generation lease 必须可在事务中原子获取和释放；遗留的运行中状态在进程恢复后标为 `interrupted`，不得自动重新 POST。
 * SSE 响应：`text/event-stream` 仅发送以下 JSON 事件：`{ "type": "history", "history": ChatHistoryPayload }`、`{ "type": "delta", "messageId": string, "text": string }`、`{ "type": "error", "message": string, "history"?: ChatHistoryPayload }`、`{ "type": "done", "history": ChatHistoryPayload }`。流式 `history` 和 `done`/`error` 中的历史均为最新页。每条增量先持久化再发送；不发送 `meta` 事件或内部 generation 信息。
 * 服务端配置：`DOCLENS_DEEPSEEK_API_KEY`（必填；无默认值）、`DOCLENS_DEEPSEEK_BASE_URL`（默认 `https://api.deepseek.com`）、`DOCLENS_DEEPSEEK_MODEL`（默认 `deepseek-flash`）、`DOCLENS_DEEPSEEK_TIMEOUT_MS`（默认 `120000`）。这些值仅由服务端读取；前端不得暴露密钥或配置值。模型默认值以 [DeepSeek 官方首次调用文档](https://api-docs.deepseek.com/zh-cn/) 为准。
-* 输入限制：单条新问题最多 4,000 字符；每条持久消息最多 32,000 字符；每轮模型上下文最多 40 条消息且合计最多 100,000 字符，按最新消息选取，不据此删除持久历史；请求 JSON body 最多 512 KiB。
+* 输入限制：文档与独立聊天的单条新问题及持久用户消息最多 100,000 字符；持久助手消息最多 32,000 字符。前端计数、发送校验、服务端校验及历史读取保持一致，100,000 字符可提交，100,001 字符明确拒绝。每轮模型聊天上下文最多 40 条消息且合计最多 100,000 字符，当前问题完整保留，超预算只排除较早对话，不裁剪当前输入，也不删除持久历史；请求 JSON body 最多 1 MiB，以容纳合法长文本的 JSON 转义。
 * 文档限制：服务端只接受不超过 524,288 字节且不超过 100,000 字符的文本文件。任一限制超出时返回明确提示，禁止静默截断或只传入部分文档后声称已阅读全文。
 
 **FR-16 顶部新建聊天**
@@ -430,7 +430,7 @@ DOCLENS_DEEPSEEK_TIMEOUT_MS=120000
 11. `/api/chat/history` 返回 `ChatHistoryPayload`；SSE 仅有 history/delta/error/done，delta 带 messageId，done 带最终历史，不向客户端暴露内部 generation 信息
 12. `/api/chat/history` 与 `/api/chat` 按 canonical docs root + normalized path 隔离历史；聊天只持久化到 `DOCLENS_DB_PATH` 的 SQLite，通过增量兼容迁移实现；不改 docs 源文件、不写浏览器持久存储
 13. 不支持提取的 PDF/二进制文档显示清楚的不支持状态；凭证仅服务端配置，缺失凭证时返回明确可读错误
-14. 问题、单条消息和 body 分别遵守 4,000 字符、32,000 字符与 512 KiB 限制；每轮模型上下文和历史分页分别最多 40 条/100,000 字符；完整 SQLite 历史不因上下文预算被删除。文档同时遵守 524,288 字节和 100,000 字符限制，超限清楚提示且不得静默截断
+14. 新问题及持久用户消息遵守 100,000 字符限制，助手回复遵守 32,000 字符限制，JSON body 最多 1 MiB；100,000 字符问题完整保存、发给模型并可读取，100,001 字符在前端与 API 均明确拒绝。每轮模型聊天上下文和历史分页分别最多 40 条/100,000 字符；当前问题不裁剪，完整 SQLite 历史不因上下文预算被删除，超页消息可加载更早记录。文档仍同时遵守 524,288 字节和 100,000 字符限制，超限清楚提示且不得静默截断
 15. 对话历史默认恢复最新页；超过一页时可用既有 message ID 加载更早记录，`hasMore` 正确反映剩余历史；发送和 SSE 完成后仍返回最新页
 16. 当内容适合图示时，回答优先一张 6–8 节点以内的 Mermaid 核心图；比较、分类、映射或参数问题优先紧凑 Markdown 表格；流式期间显示图表生成占位，消息完成/停止/出错后渲染一次；图表解析/安全失败时源码可见且无可执行 HTML/SVG
 17. 聊天 Mermaid 无外框和标题栏，只显示 SVG，内嵌区域不超过当前页面高度的 1/3，竖向图与横向图均按比例完整缩放；左上角放置 44px 放大按钮，不显示 tooltip 悬浮提示，且不遮挡图表节点。放大后按自然尺寸显示并支持横纵平移。普通文档预览继续使用 `presentation="document"` 的原有外观

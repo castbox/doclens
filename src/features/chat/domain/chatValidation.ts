@@ -73,12 +73,12 @@ function parseHistoryTurns(value: unknown): ChatTurn[] {
       throw new ChatValidationError(`第 ${index + 1} 条消息内容不能为空`);
     }
 
-    if (content.length > MAX_CHAT_MESSAGE_CHARS) {
-      throw new ChatValidationError(`单条消息不能超过 ${MAX_CHAT_MESSAGE_CHARS} 个字符`);
-    }
-
     if (role === "user" && content.length > MAX_QUESTION_CHARS) {
       throw new ChatValidationError(`每个问题不能超过 ${MAX_QUESTION_CHARS} 个字符`);
+    }
+
+    if (role === "assistant" && content.length > MAX_CHAT_MESSAGE_CHARS) {
+      throw new ChatValidationError(`单条消息不能超过 ${MAX_CHAT_MESSAGE_CHARS} 个字符`);
     }
 
     if (index > 0 && messages[index - 1].role === role) {

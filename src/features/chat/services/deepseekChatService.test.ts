@@ -210,6 +210,36 @@ describe("openDocumentChat SQLite 历史、安全与 DeepSeek 流", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
+  it("将完整 100K 用户问题传给 mock 上游、写入 SQLite 并通过 SSE 返回历史", async () => {
+    const question = "q".repeat(100_000);
+    const empty = await createStandaloneChatConversation();
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(upstreamResponse(completedAnswer("已收到长问题。")));
+
+    const stream = await openStandaloneChat({
+      conversationId: empty.conversationId!,
+      action: "send",
+      content: question
+    }, new AbortController().signal);
+    const events = parseEvents(await readTextWithTimeout(stream));
+    const providerBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    const persisted = await readStandaloneChatHistory(empty.conversationId!);
+
+    expect(providerBody.messages.at(-1)).toEqual({ role: "user", content: question });
+    expect(events[0]?.type).toBe("history");
+    if (events[0]?.type === "history") {
+      expect(events[0].history.messages.find((message) => message.role === "user")?.content).toBe(question);
+    }
+    expect(events.at(-1)).toMatchObject({ type: "done" });
+    expect(persisted.hasMore).toBe(true);
+    const olderHistory = await readStandaloneChatHistory(empty.conversationId!, persisted.messages[0]?.id);
+    expect(olderHistory.messages[0]).toMatchObject({ role: "user", content: question, status: "complete" });
+    expect(olderHistory.messages[0]?.content).toHaveLength(100_000);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   it("用 SQLite 持久化概述，delta 带对应助手 ID，完成后可恢复且恢复不调用 provider", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValueOnce(upstreamResponse(completedAnswer("文档说明了真实流程。")));

@@ -85,7 +85,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   if (declaresOversizedBody(request)) {
-    return jsonError("请求内容超过 512 KiB 限制。", 413);
+    return jsonError("请求内容超过 1 MiB 限制。", 413);
   }
 
   let parsedBody: unknown;
@@ -93,7 +93,7 @@ export async function POST(request: Request): Promise<Response> {
     parsedBody = await readBoundedJsonBody(request);
   } catch (error) {
     if (error instanceof RequestBodyTooLargeError) {
-      return jsonError("请求内容超过 512 KiB 限制。", 413);
+      return jsonError("请求内容超过 1 MiB 限制。", 413);
     }
 
     return jsonError(INVALID_BODY_MESSAGE, 400);

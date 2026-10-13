@@ -1,0 +1,12 @@
+{
+  "conversationId": "312eb600-0065-46f1-b350-f6a9481a34aa",
+  "latestHasMore": true,
+  "userChars": 100000,
+  "userSha256": "7afaec9db2d1f347e46eee3af2a29726de4d4a78c6306b0bc2f3f7f859f918eb",
+  "providerChars": 100000,
+  "providerSha256": "7afaec9db2d1f347e46eee3af2a29726de4d4a78c6306b0bc2f3f7f859f918eb",
+  "matchesProvider": true,
+  "providerBodyBytes": 602346,
+  "messagesRemainSaved": true,
+  "isGenerating": false
+}

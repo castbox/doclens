@@ -74,6 +74,11 @@ describe("parseDocumentChatRequest", () => {
     expect(
       parseDocumentChatRequest({ path: "guide.md", action: "send", content: "q".repeat(MAX_QUESTION_CHARS) })
     ).toEqual({ path: "guide.md", action: "send", content: "q".repeat(MAX_QUESTION_CHARS) });
+    expect(parseDocumentChatRequest({ path: "guide.md", action: "send", content: "q".repeat(4_768) })).toEqual({
+      path: "guide.md",
+      action: "send",
+      content: "q".repeat(4_768)
+    });
   });
 
   it("限制重试消息 ID 长度并拒绝空 ID", () => {
@@ -127,6 +132,20 @@ describe("parseStandaloneChatRequest", () => {
       action: "send",
       content: "q".repeat(MAX_QUESTION_CHARS + 1)
     })).toThrow(/每个问题不能超过/);
+    expect(parseStandaloneChatRequest({
+      conversationId: "conversation-1",
+      action: "send",
+      content: "q".repeat(4_768)
+    })).toEqual({ conversationId: "conversation-1", action: "send", content: "q".repeat(4_768) });
+    expect(parseStandaloneChatRequest({
+      conversationId: "conversation-1",
+      action: "send",
+      content: "q".repeat(MAX_QUESTION_CHARS)
+    })).toEqual({
+      conversationId: "conversation-1",
+      action: "send",
+      content: "q".repeat(MAX_QUESTION_CHARS)
+    });
   });
 });
 
@@ -178,6 +197,10 @@ describe("parseChatHistory", () => {
         { role: "user", content: "继续" }
       ])
     ).toThrow(/单条消息不能超过/);
+
+    expect(parseChatHistory([{ role: "user", content: "q".repeat(MAX_QUESTION_CHARS) }])).toEqual([
+      { role: "user", content: "q".repeat(MAX_QUESTION_CHARS) }
+    ]);
 
     const longHistory = [
       { role: "assistant" as const, content: "自动概述" },

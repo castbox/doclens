@@ -4,6 +4,7 @@ import {
   MAX_CHAT_HISTORY_PAGE_CHARS,
   MAX_CHAT_HISTORY_PAGE_MESSAGES,
   MAX_CHAT_MESSAGE_CHARS,
+  MAX_QUESTION_CHARS,
   MAX_CHAT_REQUEST_BYTES,
   type ChatHistoryPayload,
   type ChatMessage,
@@ -246,7 +247,11 @@ function parseChatMessage(value: unknown): ChatMessage | null {
   if (!validId(value.id) || (value.role !== "user" && value.role !== "assistant")) {
     return null;
   }
-  if (typeof value.content !== "string" || value.content.length > MAX_CHAT_MESSAGE_CHARS) {
+  if (
+    typeof value.content !== "string" ||
+    (value.role === "user" && value.content.length > MAX_QUESTION_CHARS) ||
+    (value.role === "assistant" && value.content.length > MAX_CHAT_MESSAGE_CHARS)
+  ) {
     return null;
   }
   if (typeof value.status !== "string" || !MESSAGE_STATUSES.has(value.status as ChatMessageStatus)) {
