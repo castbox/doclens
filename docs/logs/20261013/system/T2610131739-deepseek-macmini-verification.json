@@ -1,0 +1,19 @@
+{
+  "key_matches_source": true,
+  "base_url_matches_source": true,
+  "model_matches_source": true,
+  "server_config_valid": true,
+  "models_http_status": 200,
+  "configured_model_listed": true,
+  "chat_http_status": 200,
+  "reply_has_text": true,
+  "reply_matches_ok": true,
+  "model": "deepseek-flash",
+  "usage": {
+    "prompt_tokens": 7,
+    "completion_tokens": 1,
+    "total_tokens": 8
+  },
+  "verified_at": "2026-10-13T09:36:51.860Z",
+  "scope": "mini_project_configuration_and_single_provider_completion_no_business_database"
+}
