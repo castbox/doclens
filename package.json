@@ -2,6 +2,9 @@
   "name": "doclens",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -21,7 +24,7 @@
     "@tanstack/react-virtual": "^3.13.23",
     "@turbodocx/html-to-docx": "^1.20.1",
     "@uiw/react-markdown-preview": "^5.1.5",
-    "better-sqlite3": "^11.7.2",
+    "better-sqlite3": "^13.0.3",
     "dompurify": "^3.3.2",
     "drizzle-orm": "^0.38.3",
     "github-slugger": "^2.0.0",

@@ -31,6 +31,7 @@ import dynamic from "next/dynamic";
 import type { DocStarStatus, DocStarUpdate, FilePreviewPayload, PathMetaPayload } from "@/features/docs/domain/types";
 import { DocBreadcrumb } from "@/features/docs/ui/DocBreadcrumb";
 import { EmptyState, LoadingState } from "@/shared/ui/StateCard";
+import { copyTextToClipboard } from "@/shared/utils/clipboard";
 import type { DocExportFormat } from "@/features/docs/domain/docExport";
 
 type PreviewLocation = {
@@ -718,11 +719,18 @@ export function DocPreview({
                     return;
                   }
 
-                  await navigator.clipboard.writeText(copyPath);
-                  setCopyFeedback({
-                    severity: "success",
-                    message: "已复制仓库路径"
-                  });
+                  try {
+                    await copyTextToClipboard(copyPath);
+                    setCopyFeedback({
+                      severity: "success",
+                      message: "已复制仓库路径"
+                    });
+                  } catch {
+                    setCopyFeedback({
+                      severity: "error",
+                      message: "复制仓库路径失败"
+                    });
+                  }
                 }}
               >
                 <ContentCopyIcon fontSize="small" />
@@ -777,13 +785,17 @@ export function DocPreview({
                   sx={{ border: "1px solid", borderColor: "divider", bgcolor: "background.paper" }}
                   onClick={async () => {
                     try {
-                      const response = await fetch(`/api/docs/file?path=${encodeURIComponent(path)}&raw=1`);
-                      if (!response.ok) {
-                        throw new Error("failed to load markdown source");
+                      let markdownSource = data?.content ?? "";
+                      if (!data || data.truncated) {
+                        const response = await fetch(`/api/docs/file?path=${encodeURIComponent(path)}&raw=1`);
+                        if (!response.ok) {
+                          throw new Error("failed to load markdown source");
+                        }
+
+                        markdownSource = await response.text();
                       }
 
-                      const markdownSource = await response.text();
-                      await navigator.clipboard.writeText(markdownSource);
+                      await copyTextToClipboard(markdownSource);
                       setCopyFeedback({
                         severity: "success",
                         message: "已复制 Markdown 源文件"

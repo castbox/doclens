@@ -72,12 +72,14 @@ docs/prd/                PRD 与项目文档
 
 ### 1. 检查前置依赖
 
-- Node.js 与 pnpm 使用项目本机环境即可。
+- Node.js ≥ 22（`better-sqlite3@13` 走 N-API 预编译产物；Node 24.19/24.20 的 `node::ObjectWrap` 回归会让旧版原生模块在 GC 时 abort，见 `docs/logs/20260914/system`）。
+- pnpm 使用项目本机环境即可（本机以 Corepack 固定 `pnpm@8.15.4`）。
 - `rg` 必须在 `PATH` 中，否则 `/search` 和搜索 API 无法工作。
 - SQLite 数据库文件会按 `DOCLENS_DB_PATH` 自动落到本地 `data/`，该目录不会提交到 Git。
 
 ```bash
 rg --version
+node --version
 pnpm --version
 ```
 
@@ -86,6 +88,8 @@ pnpm --version
 ```bash
 pnpm install
 ```
+
+> pnpm 8 会对含 `binding.gyp` 的依赖触发 `node-gyp rebuild`。如果报 `No module named 'distutils'`（Python 3.12+ 已移除 `distutils`），请显式指定仍带 `distutils` 的 Python，例如 macOS 上的 `npm_config_python=/usr/bin/python3 pnpm install`。
 
 ### 3. 配置环境变量
 
