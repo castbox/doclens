@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { readDocsRootBinding } from "./docsRootBinding";
 
 const DEFAULT_DOCS_ROOT = "./docs";
 const DEFAULT_DB_PATH = "./data/doclens.sqlite";
@@ -20,6 +21,8 @@ type Config = {
 };
 
 let cachedConfig: Config | null = null;
+let cachedConfigValidatedAt = 0;
+const CONFIG_REVALIDATE_MS = 1000;
 
 function parseNumber(value: string | undefined, fallback: number): number {
   if (!value) {
@@ -58,12 +61,13 @@ function resolveDocsRoot(rawDocsRoot: string): Pick<Config, "configuredDocsRoot"
 }
 
 export function getConfig(): Config {
-  if (cachedConfig) {
+  if (cachedConfig && Date.now() - cachedConfigValidatedAt < CONFIG_REVALIDATE_MS) {
     return cachedConfig;
   }
 
-  const docsRootConfig = resolveDocsRoot(process.env.DOCLENS_DOCS_ROOT ?? DEFAULT_DOCS_ROOT);
   const dbPath = path.resolve(process.cwd(), process.env.DOCLENS_DB_PATH ?? DEFAULT_DB_PATH);
+  const boundDocsRoot = readDocsRootBinding(dbPath);
+  const docsRootConfig = resolveDocsRoot(boundDocsRoot ?? process.env.DOCLENS_DOCS_ROOT ?? DEFAULT_DOCS_ROOT);
   const searchProvider = (process.env.DOCLENS_SEARCH_PROVIDER ?? DEFAULT_SEARCH_PROVIDER).toLowerCase();
   const searchIgnore = (process.env.DOCLENS_SEARCH_IGNORE ?? DEFAULT_SEARCH_IGNORE.join(","))
     .split(",")
@@ -78,10 +82,12 @@ export function getConfig(): Config {
     maxPreviewBytes: parseNumber(process.env.DOCLENS_MAX_FILE_PREVIEW_BYTES, DEFAULT_MAX_PREVIEW_BYTES),
     maxPreviewLines: parseNumber(process.env.DOCLENS_MAX_FILE_PREVIEW_LINES, DEFAULT_MAX_PREVIEW_LINES)
   };
+  cachedConfigValidatedAt = Date.now();
 
   return cachedConfig;
 }
 
 export function clearConfigCache(): void {
   cachedConfig = null;
+  cachedConfigValidatedAt = 0;
 }
