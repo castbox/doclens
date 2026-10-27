@@ -26,7 +26,7 @@
 
 ## 验证
 
-- `pnpm test:run`：26 个测试文件、208 个测试全部通过。
+- `pnpm test:run`：28 个测试文件、224 个测试全部通过。
 - `pnpm build`：Next.js 生产构建成功。
 - 本地生产构建浏览器冒烟：
   - 目标文档正常渲染，包含正文标题和 `tencent%`。
@@ -34,6 +34,17 @@
   - `#heading-100%25` 与非法 `#heading-100%` 均不再崩溃。
 - 独立 `tsc --noEmit` 仍报告既有 `mermaidSvg.test.ts` 的 `DOMParser` 类型问题，
   该问题不影响本次 `pnpm build`，也不是本次改动引入。
+
+## 线上部署验证
+
+- 代码提交：`2657bb0`（包含 `1906852 fix: harden malformed URI decoding in docs preview`）。
+- `bj010-guru` 的 DocLens checkout 已快进到 `2657bb0`。
+- 服务 `doclens-ai-generation-flow-6611.service` 已重启，`just doclens` 自动重新构建生产产物。
+- 2026-10-27 12:08 CST 使用无头 Chrome 验证目标 URL：
+  - HTTP 200。
+  - 页面标题与正文 `tencent%` 均可见。
+  - `pageerror` 为空，`Application error` 不存在。
+  - `#heading-100%25` 与非法 `#heading-100%` 均不触发崩溃。
 
 ## 风险与回滚
 
