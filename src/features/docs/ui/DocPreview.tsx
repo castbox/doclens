@@ -31,9 +31,9 @@ import dynamic from "next/dynamic";
 import type { DocStarStatus, DocStarUpdate, FilePreviewPayload, PathMetaPayload } from "@/features/docs/domain/types";
 import { DocBreadcrumb } from "@/features/docs/ui/DocBreadcrumb";
 import { EmptyState, LoadingState } from "@/shared/ui/StateCard";
-import { copyTextToClipboard } from "@/shared/utils/clipboard";
 import { safeDecodeURIComponent } from "@/shared/utils/uri";
 import type { DocExportFormat } from "@/features/docs/domain/docExport";
+import { copyTextToClipboard } from "@/shared/services/clipboardService";
 
 type PreviewLocation = {
   line?: number;
@@ -196,12 +196,13 @@ export function DocPreview({
 }): React.JSX.Element {
   const previewCacheRef = React.useRef<Map<string, FilePreviewPayload>>(new Map());
   const [data, setData] = React.useState<FilePreviewPayload | null>(null);
-  const [dataRequestKey, setDataRequestKey] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
   const [starState, setStarState] = React.useState<DocStarStatus | null>(null);
   const [starSaving, setStarSaving] = React.useState(false);
   const [copyFeedback, setCopyFeedback] = React.useState<{ severity: "success" | "error"; message: string } | null>(null);
+  const [markdownSource, setMarkdownSource] = React.useState<string | null>(null);
+  const [markdownSourceLoading, setMarkdownSourceLoading] = React.useState(false);
   const [outlineCollapsed, setOutlineCollapsed] = React.useState(true);
   const [chatOpen, setChatOpen] = React.useState(false);
   const [chatPath, setChatPath] = React.useState<string | null>(null);
@@ -219,10 +220,17 @@ export function DocPreview({
   const codePreviewLocation = data?.kind === "code" || data?.kind === "text" ? location : undefined;
   const onLoadedRef = React.useRef(onLoaded);
   const onChatOpenChangeRef = React.useRef(onChatOpenChange);
+  const currentPathRef = React.useRef(path);
 
   React.useEffect(() => {
     onLoadedRef.current = onLoaded;
   }, [onLoaded]);
+
+  React.useEffect(() => {
+    currentPathRef.current = path;
+    setChatOpen(false);
+    setChatPath(null);
+  }, [path]);
 
   React.useEffect(() => {
     onChatOpenChangeRef.current = onChatOpenChange;
@@ -235,11 +243,6 @@ export function DocPreview({
   React.useEffect(() => () => {
     onChatOpenChangeRef.current?.(false);
   }, []);
-
-  React.useEffect(() => {
-    setChatOpen(false);
-    setChatPath(null);
-  }, [path]);
 
   const writePreviewCache = React.useCallback((cacheKey: string, payload: FilePreviewPayload) => {
     const current = previewCacheRef.current;
@@ -273,7 +276,6 @@ export function DocPreview({
   React.useEffect(() => {
     if (!path) {
       setData(null);
-      setDataRequestKey(null);
       setStarState(null);
       return;
     }
@@ -281,7 +283,6 @@ export function DocPreview({
     const cached = previewCacheRef.current.get(previewCacheKey);
     if (cached) {
       setData(cached);
-      setDataRequestKey(previewCacheKey);
       setStarState(cached.star ?? buildFallbackStarState(cached.path));
       setError("");
       setLoading(false);
@@ -311,7 +312,6 @@ export function DocPreview({
         }
 
         setData(payload);
-        setDataRequestKey(previewCacheKey);
         setStarState(payload.star ?? buildFallbackStarState(payload.path));
         writePreviewCache(previewCacheKey, payload);
         onLoadedRef.current?.(payload.path);
@@ -354,6 +354,66 @@ export function DocPreview({
     setStarState(nextStarState);
     patchCachedStarState(nextStarState);
   }, [externalStarUpdate, patchCachedStarState, path]);
+
+  React.useEffect(() => {
+    if (!data || data.path !== path || data.kind !== "markdown") {
+      setMarkdownSource(null);
+      setMarkdownSourceLoading(false);
+      return;
+    }
+
+    if (!data.truncated) {
+      setMarkdownSource(data.content);
+      setMarkdownSourceLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    let active = true;
+    setMarkdownSource(null);
+    setMarkdownSourceLoading(true);
+
+    const loadMarkdownSource = async () => {
+      try {
+        const response = await fetch(
+          `/api/docs/file?path=${encodeURIComponent(path)}&raw=1`,
+          { signal: controller.signal }
+        );
+        if (!response.ok) {
+          throw new Error("failed to load markdown source");
+        }
+
+        const source = await response.text();
+        if (active) {
+          setMarkdownSource(source);
+        }
+      } catch (sourceError) {
+        if (
+          !active ||
+          (sourceError instanceof DOMException &&
+            sourceError.name === "AbortError")
+        ) {
+          return;
+        }
+
+        setCopyFeedback({
+          severity: "error",
+          message: "Markdown 原文加载失败，请打开原文件后手动复制"
+        });
+      } finally {
+        if (active) {
+          setMarkdownSourceLoading(false);
+        }
+      }
+    };
+
+    void loadMarkdownSource();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [data, path]);
 
   React.useEffect(() => {
     if (!data || data.kind !== "markdown") {
@@ -544,6 +604,55 @@ export function DocPreview({
     }
   }, [onStarChanged, patchCachedStarState, path, starSaving, starState?.isStarred]);
 
+  const handleCopyPath = React.useCallback(async () => {
+    const text = data?.path === path ? data.repositoryPath : "";
+    if (!text) {
+      return;
+    }
+
+    const result = await copyTextToClipboard(text);
+    setCopyFeedback(
+      result.ok
+        ? {
+            severity: "success",
+            message: "已复制仓库路径"
+          }
+        : {
+            severity: "error",
+            message: "无法自动复制，请检查剪贴板权限或改用 HTTPS 后重试"
+          }
+    );
+  }, [data, path]);
+
+  const handleCopyMarkdownSource = React.useCallback(async () => {
+    if (
+      data?.path !== path ||
+      data.kind !== "markdown" ||
+      markdownSource === null ||
+      markdownSourceLoading
+    ) {
+      return;
+    }
+
+    const copiedPath = path;
+    const result = await copyTextToClipboard(markdownSource);
+    if (currentPathRef.current !== copiedPath) {
+      return;
+    }
+
+    setCopyFeedback(
+      result.ok
+        ? {
+            severity: "success",
+            message: "已复制 Markdown 源文件"
+          }
+        : {
+            severity: "error",
+            message: "无法自动复制，请打开原文件后手动复制"
+          }
+    );
+  }, [data, markdownSource, markdownSourceLoading, path]);
+
   const previewBody = React.useMemo(() => {
     if (loading || error || !data) {
       return null;
@@ -632,15 +741,16 @@ export function DocPreview({
     return <EmptyState title="请选择文件" description="从左侧目录树选择一个文档开始预览" />;
   }
 
-  const copyPath = data?.repositoryPath ?? "";
-  const currentDocumentData = dataRequestKey === previewCacheKey ? data : null;
+  const currentData = data?.path === path ? data : null;
+  const copyPath = currentData?.repositoryPath ?? "";
+  const isCurrentMarkdown = currentData?.kind === "markdown";
   const chatDisabledReason = loading
     ? "文档正在加载，暂不可对话"
     : error
       ? "文档加载失败，暂不可对话"
-      : !currentDocumentData
+      : !currentData
         ? "文档内容尚未加载，暂不可对话"
-        : currentDocumentData.kind === "pdf" || currentDocumentData.kind === "binary"
+        : currentData.kind === "pdf" || currentData.kind === "binary"
           ? "PDF 和二进制文件暂不支持对话"
           : "";
 
@@ -716,23 +826,8 @@ export function DocPreview({
                 aria-label="copy path"
                 sx={{ border: "1px solid", borderColor: "divider", bgcolor: "background.paper" }}
                 disabled={!copyPath}
-                onClick={async () => {
-                  if (!copyPath) {
-                    return;
-                  }
-
-                  try {
-                    await copyTextToClipboard(copyPath);
-                    setCopyFeedback({
-                      severity: "success",
-                      message: "已复制仓库路径"
-                    });
-                  } catch {
-                    setCopyFeedback({
-                      severity: "error",
-                      message: "复制仓库路径失败"
-                    });
-                  }
+                onClick={() => {
+                  void handleCopyPath();
                 }}
               >
                 <ContentCopyIcon fontSize="small" />
@@ -779,39 +874,29 @@ export function DocPreview({
                 <ListItemText primary="保存为 .doc" secondary="兼容旧版 Word 打开方式" />
               </MenuItem>
             </Menu>
-            {data?.kind === "markdown" ? (
+            {isCurrentMarkdown ? (
               <Tooltip title="复制 Markdown 源文件">
-                <IconButton
-                  size="small"
-                  aria-label="copy markdown source"
-                  sx={{ border: "1px solid", borderColor: "divider", bgcolor: "background.paper" }}
-                  onClick={async () => {
-                    try {
-                      let markdownSource = data?.content ?? "";
-                      if (!data || data.truncated) {
-                        const response = await fetch(`/api/docs/file?path=${encodeURIComponent(path)}&raw=1`);
-                        if (!response.ok) {
-                          throw new Error("failed to load markdown source");
-                        }
-
-                        markdownSource = await response.text();
-                      }
-
-                      await copyTextToClipboard(markdownSource);
-                      setCopyFeedback({
-                        severity: "success",
-                        message: "已复制 Markdown 源文件"
-                      });
-                    } catch {
-                      setCopyFeedback({
-                        severity: "error",
-                        message: "复制 Markdown 源文件失败"
-                      });
+                <span>
+                  <IconButton
+                    size="small"
+                    aria-label="copy markdown source"
+                    sx={{ border: "1px solid", borderColor: "divider", bgcolor: "background.paper" }}
+                    disabled={
+                      markdownSourceLoading ||
+                      markdownSource === null ||
+                      markdownSource.length === 0
                     }
-                  }}
-                >
-                  <ArticleOutlinedIcon fontSize="small" />
-                </IconButton>
+                    onClick={() => {
+                      void handleCopyMarkdownSource();
+                    }}
+                  >
+                    {markdownSourceLoading ? (
+                      <CircularProgress size={16} />
+                    ) : (
+                      <ArticleOutlinedIcon fontSize="small" />
+                    )}
+                  </IconButton>
+                </span>
               </Tooltip>
             ) : null}
             <Tooltip title="打开原文件">
@@ -853,7 +938,7 @@ export function DocPreview({
 
       <Snackbar
         open={Boolean(copyFeedback)}
-        autoHideDuration={2200}
+        autoHideDuration={copyFeedback?.severity === "error" ? 6000 : 2200}
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
         onClose={() => {
           setCopyFeedback(null);
@@ -875,7 +960,7 @@ export function DocPreview({
           key={path}
           open
           path={path}
-          displayPath={currentDocumentData?.repositoryPath ?? path}
+          displayPath={currentData?.repositoryPath ?? path}
           onClose={() => {
             setChatOpen(false);
             setChatPath(null);
