@@ -97,6 +97,12 @@ describe("markdownPreviewTransform", () => {
     expect(resolveMarkdownDocPath("docs/pr/%E8%8C%83%E5%9B%B4.md", currentPath)).toBe("pr/范围.md");
   });
 
+  it("项目根模式下非 Markdown 行内代码含裸百分号时不会崩溃", () => {
+    const currentPath = "docs/solutions/workflow-issues/tencent-mps-three-feature-config-diagnosis-2026-10-27.md";
+
+    expect(resolveMarkdownDocPathCandidates("tencent%", currentPath, { pathPrefix: "" })).toEqual([]);
+  });
+
   it("会保留 Diff 章节中纯文本段落的显式换行", () => {
     const input = ["## 关键 Diff（自检）", "第一行", "- 列表项", "", "普通段落"].join("\n");
     const result = preserveDiffSectionLineBreaks(input);

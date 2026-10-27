@@ -1,3 +1,5 @@
+import { safeDecodeURIComponent } from "@/shared/utils/uri";
+
 export type LocationAnchor = {
   line?: number;
   heading?: string;
@@ -24,7 +26,7 @@ export function parseLocationAnchor(hashValue: string | null | undefined): Locat
   }
 
   if (cleanHash.startsWith("heading-")) {
-    return { heading: decodeURIComponent(cleanHash.slice("heading-".length)) };
+    return { heading: safeDecodeURIComponent(cleanHash.slice("heading-".length)) };
   }
 
   return {};

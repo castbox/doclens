@@ -32,6 +32,7 @@ import type { DocStarStatus, DocStarUpdate, FilePreviewPayload, PathMetaPayload 
 import { DocBreadcrumb } from "@/features/docs/ui/DocBreadcrumb";
 import { EmptyState, LoadingState } from "@/shared/ui/StateCard";
 import { copyTextToClipboard } from "@/shared/utils/clipboard";
+import { safeDecodeURIComponent } from "@/shared/utils/uri";
 import type { DocExportFormat } from "@/features/docs/domain/docExport";
 
 type PreviewLocation = {
@@ -63,12 +64,12 @@ function getDownloadFileName(contentDisposition: string | null, fallback: string
 
   const utf8Match = /filename\*=UTF-8''([^;]+)/i.exec(contentDisposition);
   if (utf8Match?.[1]) {
-    return decodeURIComponent(utf8Match[1]);
+    return safeDecodeURIComponent(utf8Match[1]);
   }
 
   const plainMatch = /filename="?([^"]+)"?/i.exec(contentDisposition);
   if (plainMatch?.[1]) {
-    return decodeURIComponent(plainMatch[1]);
+    return safeDecodeURIComponent(plainMatch[1]);
   }
 
   return fallback;
@@ -386,11 +387,12 @@ export function DocPreview({
     }
 
     if (location?.heading) {
-      const decodedHeading = decodeURIComponent(location.heading);
-      const byId = document.getElementById(decodedHeading);
-      const normalizedId = decodedHeading.toLowerCase().replace(/\s+/g, "-");
+      // parseLocationAnchor already decodes the fragment; decoding again breaks literal percent signs.
+      const resolvedHeading = location.heading;
+      const byId = document.getElementById(resolvedHeading);
+      const normalizedId = resolvedHeading.toLowerCase().replace(/\s+/g, "-");
       const byNormalizedId = document.getElementById(normalizedId);
-      const matchedHeading = markdownHeadings.find((heading) => heading.slug === decodedHeading || heading.text === decodedHeading);
+      const matchedHeading = markdownHeadings.find((heading) => heading.slug === resolvedHeading || heading.text === resolvedHeading);
       const headingElement = byId ?? byNormalizedId ?? (matchedHeading ? document.getElementById(matchedHeading.slug) : null);
       if (headingElement) {
         headingElement.scrollIntoView({ behavior: "smooth", block: "start" });

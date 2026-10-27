@@ -1,3 +1,5 @@
+import { safeDecodeURIComponent } from "@/shared/utils/uri";
+
 const DOC_MARKDOWN_PATH_PATTERN = /docs\/[^\s)\]`]+?\.md(?:#[^\s)\]`]+)?/g;
 
 type TextRange = {
@@ -196,18 +198,6 @@ function uniquePaths(paths: Array<string | null>): string[] {
   return result;
 }
 
-function safelyDecodeURIComponent(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch (error) {
-    if (error instanceof URIError) {
-      return value;
-    }
-
-    throw error;
-  }
-}
-
 export function resolveMarkdownDocPathCandidates(
   href: string | undefined,
   currentPath: string,
@@ -217,7 +207,7 @@ export function resolveMarkdownDocPathCandidates(
     return [];
   }
 
-  const decodedHref = safelyDecodeURIComponent(href).trim();
+  const decodedHref = safeDecodeURIComponent(href).trim();
   if (!decodedHref || decodedHref.startsWith("#")) {
     return [];
   }
@@ -279,5 +269,5 @@ export function buildAnchorHash(href: string | undefined): string {
     return "";
   }
 
-  return safelyDecodeURIComponent(raw);
+  return safeDecodeURIComponent(raw);
 }
